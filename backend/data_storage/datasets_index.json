@@ -1,0 +1,38 @@
+[
+  {
+    "id": "mt5_csv_eurusd_4h",
+    "symbol": "EURUSD",
+    "name": "EURUSD (4h) - EURUSD_H4_202101040000_202606112000.csv",
+    "timeframe": "4h",
+    "start_date": "2021.01.04",
+    "end_date": "2026.06.11",
+    "row_count": 8473,
+    "source": "mt5_csv",
+    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/mt5_csv_eurusd_4h.csv",
+    "created_at": "2026-08-15T17:19:03.071850"
+  },
+  {
+    "id": "mt5_csv_eurusd_1h",
+    "symbol": "EURUSD",
+    "name": "EURUSD (1h) - EURUSD_H1_202101040000_202606112000.csv",
+    "timeframe": "1h",
+    "start_date": "2021.01.04",
+    "end_date": "2026.06.11",
+    "row_count": 33839,
+    "source": "mt5_csv",
+    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/mt5_csv_eurusd_1h.csv",
+    "created_at": "2026-08-15T16:07:24.447179"
+  },
+  {
+    "id": "yfinance_btc_usd_1d",
+    "symbol": "BTC-USD",
+    "name": "BTC-USD (1d)",
+    "timeframe": "1d",
+    "start_date": "2023-01-01",
+    "end_date": "2023-01-31",
+    "row_count": 31,
+    "source": "yfinance",
+    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/yfinance_btc_usd_1d.csv",
+    "created_at": "2026-08-15T16:05:12.100601"
+  }
+]

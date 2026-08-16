@@ -1,0 +1,302 @@
+/* =========================================
+   App Layout Base
+   ========================================= */
+.appContainer {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--color-bg-primary);
+}
+
+.mainWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: 260px; /* Sidebar width */
+  min-width: 0;
+  transition: margin-left var(--transition-fast);
+}
+
+.mainContent {
+  flex: 1;
+  padding: var(--spacing-8);
+  overflow-y: auto;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* =========================================
+   Sidebar Styles
+   ========================================= */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 260px;
+  background-color: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+  transition: transform var(--transition-fast);
+}
+
+.sidebarHeader {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.logoWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.logoIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--color-accent-cyan), #007bb5);
+  border-radius: var(--radius-md);
+  color: var(--color-bg-primary);
+}
+
+.logoText {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.sidebarNav {
+  flex: 1;
+  padding: var(--spacing-4) var(--spacing-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  overflow-y: auto;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-sm);
+  transition: all var(--transition-fast);
+}
+
+.navLink:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.navLinkActive {
+  background-color: rgba(0, 212, 255, 0.1);
+  color: var(--color-accent-cyan);
+}
+
+.navLinkActive .navIcon {
+  color: var(--color-accent-cyan);
+}
+
+.navIcon {
+  color: var(--color-text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.navLink:hover .navIcon {
+  color: var(--color-text-secondary);
+}
+
+.sidebarFooter {
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.userAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-accent-cyan);
+  color: var(--color-bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-sm);
+}
+
+.userEmail {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  padding: var(--spacing-2);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.logoutBtn:hover {
+  background-color: rgba(244, 63, 94, 0.1);
+  color: var(--color-accent-rose);
+  border-color: rgba(244, 63, 94, 0.2);
+}
+
+/* =========================================
+   Header Styles
+   ========================================= */
+.header {
+  height: 72px;
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-8);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pageTitle {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-xs);
+}
+
+.breadcrumbLink {
+  color: var(--color-text-tertiary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.breadcrumbLink:hover {
+  color: var(--color-text-secondary);
+}
+
+.breadcrumbSeparator {
+  color: var(--color-border-hover);
+}
+
+.breadcrumbActive {
+  color: var(--color-text-secondary);
+}
+
+/* =========================================
+   Mobile Styles
+   ========================================= */
+.mobileHeader {
+  display: none;
+  height: 60px;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--spacing-4);
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 45;
+}
+
+.hamburger {
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  padding: var(--spacing-1);
+  cursor: pointer;
+}
+
+.sidebarOverlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(10, 14, 26, 0.8);
+  backdrop-filter: blur(2px);
+  z-index: 35;
+}
+
+@media (max-width: 1024px) {
+  .mainWrapper {
+    margin-left: 0;
+  }
+  
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+  
+  .mobileHeader {
+    display: flex;
+  }
+  
+  .sidebarOverlay {
+    display: block;
+  }
+  
+  .header {
+    padding: 0 var(--spacing-4);
+  }
+  
+  .mainContent {
+    padding: var(--spacing-4);
+  }
+}
