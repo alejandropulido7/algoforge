@@ -51,6 +51,7 @@ class MT5TradeSimulator:
         self.sizing_mode = cfg.get("sizingMode", "lots")  # "lots" | "risk_pct" | "cash"
         self.lot_size = float(cfg.get("lotSize", 0.1))
         self.risk_pct = float(cfg.get("riskPct", 1.0))
+        self.direction = cfg.get("direction", "both")  # "both" | "long" | "short"
         
         self.sl_type = cfg.get("slType", "pips")  # "pips" | "atr" | "none"
         self.sl_pips = float(cfg.get("slPips", 50.0))
@@ -74,6 +75,17 @@ class MT5TradeSimulator:
         n_bars = len(df)
         if n_bars < 2:
             return MT5SimulationResult(initial_deposit=self.initial_deposit, equity_curve=[self.initial_deposit])
+
+        # Filter entry signals by configured trade direction
+        if self.direction == "long":
+            can_enter_buy = buy_signals
+            can_enter_sell = np.zeros(n_bars, dtype=bool)
+        elif self.direction == "short":
+            can_enter_buy = np.zeros(n_bars, dtype=bool)
+            can_enter_sell = sell_signals
+        else:
+            can_enter_buy = buy_signals
+            can_enter_sell = sell_signals
 
         opens = df['Open'].values if 'Open' in df.columns else df.iloc[:, 0].values
         highs = df['High'].values if 'High' in df.columns else df.iloc[:, 0].values
@@ -186,7 +198,7 @@ class MT5TradeSimulator:
 
             # 2. Check for new order entry if flat
             if not in_position:
-                if buy_signals[i]:
+                if can_enter_buy[i]:
                     in_position = True
                     pos_dir = "buy"
                     pos_entry_price = curr_close
@@ -211,7 +223,7 @@ class MT5TradeSimulator:
                     # Position sizing
                     pos_lots = self._calc_lots(balance, pos_entry_price, pos_sl)
 
-                elif sell_signals[i]:
+                elif can_enter_sell[i]:
                     in_position = True
                     pos_dir = "sell"
                     pos_entry_price = curr_close
@@ -246,7 +258,7 @@ class MT5TradeSimulator:
             equity_curve.append(float(balance + unrealized_pnl))
 
         # Compile comprehensive metrics matching MT5 Strategy Tester
-        return self._compile_metrics(trades, equity_curve)
+        return self._compile_metrics(trades, equity_curve, df=df)
 
     def _calc_lots(self, balance: float, entry_price: float, sl_price: float) -> float:
         if self.sizing_mode == "lots":
@@ -261,7 +273,12 @@ class MT5TradeSimulator:
             return max(0.01, round(lots, 2))
         return max(0.01, round(self.lot_size, 2))
 
-    def _compile_metrics(self, trades: list[TradeRecord], equity_curve: list[float]) -> MT5SimulationResult:
+    def _compile_metrics(
+        self, 
+        trades: list[TradeRecord], 
+        equity_curve: list[float],
+        df: pd.DataFrame | None = None
+    ) -> MT5SimulationResult:
         n_trades = len(trades)
         pnls = [t.pnl for t in trades]
 
@@ -344,10 +361,19 @@ class MT5TradeSimulator:
         avg_wins = float(np.mean(win_streaks)) if win_streaks else 0.0
         avg_losses = float(np.mean(loss_streaks)) if loss_streaks else 0.0
 
+        if 'Timestamp' in df.columns:
+            timestamps = [str(ts) for ts in df['Timestamp'].values]
+        elif hasattr(df, "index"):
+            timestamps = [str(ts) for ts in df.index]
+        else:
+            timestamps = [f"Bar {k}" for k in range(n_bars)]
+
         trade_log = [
             {
                 "trade_idx": idx + 1,
                 "direction": t.direction,
+                "entry_time": timestamps[t.entry_index] if t.entry_index < len(timestamps) else "",
+                "exit_time": timestamps[t.exit_index] if t.exit_index < len(timestamps) else "",
                 "entry_price": round(t.entry_price, 5),
                 "exit_price": round(t.exit_price, 5),
                 "size": t.size,

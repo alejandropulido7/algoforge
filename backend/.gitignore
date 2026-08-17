@@ -1,6 +1,37 @@
+# =========================================
+# AlgoForge Backend .gitignore
+# =========================================
+
+# Bytecode & Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Data & Models
+models/
+data_storage/
+*.onnx
+*.zip
+*.parquet
+*.h5
+*.pkl
+
+# Secrets & Environment
 .env
-./.pytest_cache
-.pytest_cache
-venv
-.venv
+.env.*
+!.env.example
+
+# OS & Editor
 .DS_Store
+.vscode/
+.idea/

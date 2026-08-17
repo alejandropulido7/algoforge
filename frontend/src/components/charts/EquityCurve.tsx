@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -8,8 +8,24 @@ interface EquityCurveProps {
   data: number[];
 }
 
+const downsample = (arr: number[], maxPoints = 200): { idx: number; value: number }[] => {
+  if (!arr || arr.length === 0) return [];
+  if (arr.length <= maxPoints) {
+    return arr.map((val, idx) => ({ idx, value: Number(val || 0) }));
+  }
+  const step = Math.ceil(arr.length / maxPoints);
+  const result: { idx: number; value: number }[] = [];
+  for (let i = 0; i < arr.length; i += step) {
+    result.push({ idx: i, value: Number(arr[i] || 0) });
+  }
+  if (result[result.length - 1].idx !== arr.length - 1) {
+    result.push({ idx: arr.length - 1, value: Number(arr[arr.length - 1] || 0) });
+  }
+  return result;
+};
+
 const EquityCurve: React.FC<EquityCurveProps> = ({ data }) => {
-  const chartData = data.map((val, idx) => ({ idx, value: val }));
+  const chartData = useMemo(() => downsample(data, 200), [data]);
 
   return (
     <div className={styles.chartContainer}>
@@ -30,8 +46,17 @@ const EquityCurve: React.FC<EquityCurveProps> = ({ data }) => {
               contentStyle={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border)' }}
               itemStyle={{ color: 'var(--color-accent-cyan)' }}
               labelStyle={{ color: 'var(--color-text-secondary)' }}
+              formatter={(val: any) => [`$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Equity']}
             />
-            <Area type="monotone" dataKey="value" stroke="var(--color-accent-cyan)" fillOpacity={1} fill="url(#colorValue)" />
+            <Area 
+              type="linear" 
+              dataKey="value" 
+              stroke="var(--color-accent-cyan)" 
+              fillOpacity={1} 
+              fill="url(#colorValue)" 
+              isAnimationActive={false}
+              dot={false}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -39,4 +64,4 @@ const EquityCurve: React.FC<EquityCurveProps> = ({ data }) => {
   );
 };
 
-export default EquityCurve;
+export default React.memo(EquityCurve);

@@ -1,11 +1,14 @@
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type JobPhase = 'queued' | 'indicators' | 'genetic' | 'rl' | 'backtest' | 'montecarlo' | 'ranking' | 'done'
 
+export type TradeDirection = 'both' | 'long' | 'short'
+
 export interface RiskConfig {
   initialDeposit: number
   sizingMode: 'lots' | 'risk_pct' | 'cash'
   lotSize: number
   riskPct: number
+  direction: TradeDirection
   slType: 'pips' | 'atr' | 'none'
   slPips: number
   slAtrMult: number

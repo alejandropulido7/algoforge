@@ -235,6 +235,11 @@
 /* =========================================
    Spinner Styles
    ========================================= */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .spinner {
   border-radius: 50%;
   border-style: solid;

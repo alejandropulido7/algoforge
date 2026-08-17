@@ -32,6 +32,7 @@ const defaultConfig: JobConfig = {
     sizingMode: 'lots',
     lotSize: 0.1,
     riskPct: 1.0,
+    direction: 'both',
     slType: 'pips',
     slPips: 50.0,
     slAtrMult: 1.5,

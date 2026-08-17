@@ -30,6 +30,7 @@ def _normalize_config(raw: dict) -> dict:
             "sizingMode": "lots",
             "lotSize": 0.1,
             "riskPct": 1.0,
+            "direction": "both",
             "slType": "pips",
             "slPips": 50.0,
             "slAtrMult": 1.5,
@@ -146,8 +147,8 @@ def _dispatch_pipeline(job_id: str, config: dict, user_id: str):
     except Exception as e:
         print(f"[Celery dispatch exception, running in thread fallback]: {e}")
         t = threading.Thread(
-            target=run_strategy_pipeline,
-            args=(None, job_id, config),
+            target=run_strategy_pipeline.run,
+            args=(job_id, config),
             kwargs={"user_id": user_id},
             daemon=True
         )

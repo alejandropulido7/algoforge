@@ -3,7 +3,7 @@ import numpy as np
 from .registry import INDICATOR_REGISTRY, get_indicator
 
 class IndicatorCalculator:
-    """Calculates technical indicators on standard OHLCV DataFrames using the 'ta' package."""
+    """Calculates 40+ technical indicators on standard OHLCV DataFrames using the 'ta' package."""
 
     @staticmethod
     def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -45,40 +45,42 @@ class IndicatorCalculator:
         volume = df_norm['Volume']
 
         try:
-            # 1. Momentum
+            # === 1. MOMENTUM ===
             if func_name == 'rsi':
-                l = int(effective_params.get('length', 14))
+                w = int(effective_params.get('window', 14))
                 from ta.momentum import RSIIndicator
-                return RSIIndicator(close=close, window=l).rsi()
-
-            elif func_name == 'macd':
-                f = int(effective_params.get('fast', 12))
-                s = int(effective_params.get('slow', 26))
-                sig = int(effective_params.get('signal', 9))
-                from ta.trend import MACD
-                macd_ind = MACD(close=close, window_fast=f, window_slow=s, window_sign=sig)
-                return macd_ind.macd_diff()
+                return RSIIndicator(close=close, window=w).rsi()
 
             elif func_name == 'stoch':
-                k = int(effective_params.get('k', 14))
-                d = int(effective_params.get('d', 3))
+                w = int(effective_params.get('window', 14))
+                s = int(effective_params.get('smooth_window', 3))
                 from ta.momentum import StochasticOscillator
-                return StochasticOscillator(high=high, low=low, close=close, window=k, smooth_window=d).stoch()
+                return StochasticOscillator(high=high, low=low, close=close, window=w, smooth_window=s).stoch()
+
+            elif func_name == 'stochrsi':
+                w = int(effective_params.get('window', 14))
+                s1 = int(effective_params.get('smooth1', 3))
+                s2 = int(effective_params.get('smooth2', 3))
+                from ta.momentum import StochRSIIndicator
+                return StochRSIIndicator(close=close, window=w, smooth1=s1, smooth2=s2).stochrsi()
+
+            elif func_name == 'tsi':
+                ws = int(effective_params.get('window_slow', 25))
+                wf = int(effective_params.get('window_fast', 13))
+                from ta.momentum import TSIIndicator
+                return TSIIndicator(close=close, window_slow=ws, window_fast=wf).tsi()
+
+            elif func_name == 'ultimate':
+                w1 = int(effective_params.get('window1', 7))
+                w2 = int(effective_params.get('window2', 14))
+                w3 = int(effective_params.get('window3', 28))
+                from ta.momentum import UltimateOscillator
+                return UltimateOscillator(high=high, low=low, close=close, window1=w1, window2=w2, window3=w3).ultimate_oscillator()
 
             elif func_name == 'willr':
-                l = int(effective_params.get('length', 14))
+                l = int(effective_params.get('lbp', effective_params.get('window', 14)))
                 from ta.momentum import WilliamsRIndicator
                 return WilliamsRIndicator(high=high, low=low, close=close, lbp=l).williams_r()
-
-            elif func_name == 'cci':
-                l = int(effective_params.get('length', 20))
-                from ta.trend import CCIIndicator
-                return CCIIndicator(high=high, low=low, close=close, window=l).cci()
-
-            elif func_name == 'roc':
-                l = int(effective_params.get('length', 10))
-                from ta.momentum import ROCIndicator
-                return ROCIndicator(close=close, window=l).roc()
 
             elif func_name == 'ao':
                 w1 = int(effective_params.get('window1', 5))
@@ -86,95 +88,209 @@ class IndicatorCalculator:
                 from ta.momentum import AwesomeOscillatorIndicator
                 return AwesomeOscillatorIndicator(high=high, low=low, window1=w1, window2=w2).awesome_oscillator()
 
-            # 2. Trend
+            elif func_name == 'kama':
+                w = int(effective_params.get('window', 10))
+                p1 = int(effective_params.get('pow1', 2))
+                p2 = int(effective_params.get('pow2', 30))
+                from ta.momentum import KAMAIndicator
+                return KAMAIndicator(close=close, window=w, pow1=p1, pow2=p2).kama()
+
+            elif func_name == 'roc':
+                w = int(effective_params.get('window', 12))
+                from ta.momentum import ROCIndicator
+                return ROCIndicator(close=close, window=w).roc()
+
+            elif func_name == 'ppo':
+                ws = int(effective_params.get('window_slow', 26))
+                wf = int(effective_params.get('window_fast', 12))
+                w_sign = int(effective_params.get('window_sign', 9))
+                from ta.momentum import PercentagePriceOscillator
+                return PercentagePriceOscillator(close=close, window_slow=ws, window_fast=wf, window_sign=w_sign).ppo()
+
+            elif func_name == 'pvo':
+                ws = int(effective_params.get('window_slow', 26))
+                wf = int(effective_params.get('window_fast', 12))
+                w_sign = int(effective_params.get('window_sign', 9))
+                from ta.momentum import PercentageVolumeOscillator
+                return PercentageVolumeOscillator(volume=volume, window_slow=ws, window_fast=wf, window_sign=w_sign).pvo()
+
+            # === 2. TREND ===
+            elif func_name == 'macd':
+                ws = int(effective_params.get('window_slow', 26))
+                wf = int(effective_params.get('window_fast', 12))
+                w_sign = int(effective_params.get('window_sign', 9))
+                from ta.trend import MACD
+                return MACD(close=close, window_slow=ws, window_fast=wf, window_sign=w_sign).macd_diff()
+
             elif func_name == 'sma':
-                l = int(effective_params.get('length', 20))
+                w = int(effective_params.get('window', effective_params.get('length', 20)))
                 from ta.trend import SMAIndicator
-                return SMAIndicator(close=close, window=l).sma_indicator()
+                return SMAIndicator(close=close, window=w).sma_indicator()
 
             elif func_name == 'ema':
-                l = int(effective_params.get('length', 20))
+                w = int(effective_params.get('window', effective_params.get('length', 20)))
                 from ta.trend import EMAIndicator
-                return EMAIndicator(close=close, window=l).ema_indicator()
+                return EMAIndicator(close=close, window=w).ema_indicator()
+
+            elif func_name == 'wma':
+                w = int(effective_params.get('window', effective_params.get('length', 20)))
+                from ta.trend import WMAIndicator
+                return WMAIndicator(close=close, window=w).wma()
+
+            elif func_name == 'hma':
+                w = int(effective_params.get('window', effective_params.get('length', 20)))
+                wma_half = close.rolling(window=max(1, w // 2)).mean()
+                wma_full = close.rolling(window=w).mean()
+                diff = 2 * wma_half - wma_full
+                return diff.rolling(window=int(np.sqrt(w))).mean()
 
             elif func_name == 'adx':
-                l = int(effective_params.get('length', 14))
+                w = int(effective_params.get('window', effective_params.get('length', 14)))
                 from ta.trend import ADXIndicator
-                return ADXIndicator(high=high, low=low, close=close, window=l).adx()
+                return ADXIndicator(high=high, low=low, close=close, window=w).adx()
 
             elif func_name == 'aroon':
-                l = int(effective_params.get('length', 25))
+                w = int(effective_params.get('window', effective_params.get('length', 25)))
                 from ta.trend import AroonIndicator
-                return AroonIndicator(high=high, low=low, window=l).aroon_indicator()
+                return AroonIndicator(high=high, low=low, window=w).aroon_indicator()
+
+            elif func_name == 'cci':
+                w = int(effective_params.get('window', effective_params.get('length', 20)))
+                from ta.trend import CCIIndicator
+                return CCIIndicator(high=high, low=low, close=close, window=w).cci()
 
             elif func_name == 'psar':
-                af0 = float(effective_params.get('af0', 0.02))
-                max_af = float(effective_params.get('max_af', 0.2))
+                step = float(effective_params.get('step', effective_params.get('af0', 0.02)))
+                max_step = float(effective_params.get('max_step', effective_params.get('max_af', 0.2)))
                 from ta.trend import PSARIndicator
-                return PSARIndicator(high=high, low=low, close=close, step=af0, max_step=max_af).psar()
+                return PSARIndicator(high=high, low=low, close=close, step=step, max_step=max_step).psar()
+
+            elif func_name == 'ichimoku':
+                w1 = int(effective_params.get('window1', 9))
+                w2 = int(effective_params.get('window2', 26))
+                w3 = int(effective_params.get('window3', 52))
+                from ta.trend import IchimokuIndicator
+                return IchimokuIndicator(high=high, low=low, window1=w1, window2=w2, window3=w3).ichimoku_base_line()
+
+            elif func_name == 'kst':
+                from ta.trend import KSTIndicator
+                return KSTIndicator(close=close).kst()
+
+            elif func_name == 'dpo':
+                w = int(effective_params.get('window', 20))
+                from ta.trend import DPOIndicator
+                return DPOIndicator(close=close, window=w).dpo()
 
             elif func_name == 'trix':
-                l = int(effective_params.get('length', 15))
+                w = int(effective_params.get('window', 15))
                 from ta.trend import TRIXIndicator
-                return TRIXIndicator(close=close, window=l).trix()
+                return TRIXIndicator(close=close, window=w).trix()
 
-            # 3. Volatility
-            elif func_name == 'bbands':
-                l = int(effective_params.get('length', 20))
-                std = float(effective_params.get('std', 2.0))
-                from ta.volatility import BollingerBands
-                bb = BollingerBands(close=close, window=l, window_dev=std)
-                return bb.bollinger_pband()
+            elif func_name == 'mass_index':
+                wf = int(effective_params.get('window_fast', 9))
+                ws = int(effective_params.get('window_slow', 25))
+                from ta.trend import MassIndex
+                return MassIndex(high=high, low=low, window_fast=wf, window_slow=ws).mass_index()
 
+            elif func_name == 'vortex':
+                w = int(effective_params.get('window', 14))
+                from ta.trend import VortexIndicator
+                return VortexIndicator(high=high, low=low, close=close, window=w).vortex_indicator_pos()
+
+            elif func_name == 'stc':
+                ws = int(effective_params.get('window_slow', 50))
+                wf = int(effective_params.get('window_fast', 23))
+                cycle = int(effective_params.get('cycle', 10))
+                from ta.trend import STCIndicator
+                return STCIndicator(close=close, window_slow=ws, window_fast=wf, cycle=cycle).stc()
+
+            # === 3. VOLATILITY ===
             elif func_name == 'atr':
-                l = int(effective_params.get('length', 14))
+                w = int(effective_params.get('window', 14))
                 from ta.volatility import AverageTrueRange
-                return AverageTrueRange(high=high, low=low, close=close, window=l).average_true_range()
+                return AverageTrueRange(high=high, low=low, close=close, window=w).average_true_range()
+
+            elif func_name == 'bbands':
+                w = int(effective_params.get('window', 20))
+                std = float(effective_params.get('window_dev', effective_params.get('std', 2.0)))
+                from ta.volatility import BollingerBands
+                return BollingerBands(close=close, window=w, window_dev=std).bollinger_pband()
 
             elif func_name == 'kc':
-                l = int(effective_params.get('length', 20))
+                w = int(effective_params.get('window', 20))
+                w_atr = int(effective_params.get('window_atr', 10))
+                mult = float(effective_params.get('multiplier', effective_params.get('scalar', 2.0)))
                 from ta.volatility import KeltnerChannel
-                return KeltnerChannel(high=high, low=low, close=close, window=l).keltner_channel_pband()
+                return KeltnerChannel(high=high, low=low, close=close, window=w, window_atr=w_atr, multiplier=mult).keltner_channel_pband()
 
             elif func_name == 'dc':
-                l = int(effective_params.get('length', 20))
+                w = int(effective_params.get('window', 20))
                 from ta.volatility import DonchianChannel
-                return DonchianChannel(high=high, low=low, close=close, window=l).donchian_channel_pband()
+                return DonchianChannel(high=high, low=low, close=close, window=w).donchian_channel_pband()
 
-            # 4. Volume
+            elif func_name == 'ulcer':
+                w = int(effective_params.get('window', 14))
+                from ta.volatility import UlcerIndex
+                return UlcerIndex(close=close, window=w).ulcer_index()
+
+            # === 4. VOLUME ===
             elif func_name == 'obv':
                 from ta.volume import OnBalanceVolumeIndicator
                 return OnBalanceVolumeIndicator(close=close, volume=volume).on_balance_volume()
-
-            elif func_name == 'mfi':
-                l = int(effective_params.get('length', 14))
-                from ta.volume import MFIIndicator
-                return MFIIndicator(high=high, low=low, close=close, volume=volume, window=l).money_flow_index()
 
             elif func_name == 'vwap':
                 w = int(effective_params.get('window', 14))
                 from ta.volume import VolumeWeightedAveragePrice
                 return VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume, window=w).volume_weighted_average_price()
 
-            # 5. Overlap
-            elif func_name == 'wma':
-                from ta.trend import WMAIndicator
-                l = int(effective_params.get('length', 20))
-                return WMAIndicator(close=close, window=l).wma()
+            elif func_name == 'mfi':
+                w = int(effective_params.get('window', 14))
+                from ta.volume import MFIIndicator
+                return MFIIndicator(high=high, low=low, close=close, volume=volume, window=w).money_flow_index()
 
-            elif func_name == 'hma':
-                l = int(effective_params.get('length', 20))
-                # Hull Moving Average calculation
-                wma_half = close.rolling(window=max(1, l // 2)).mean()
-                wma_full = close.rolling(window=l).mean()
-                diff = 2 * wma_half - wma_full
-                hma = diff.rolling(window=int(np.sqrt(l))).mean()
-                return hma
+            elif func_name == 'adi':
+                from ta.volume import AccDistIndexIndicator
+                return AccDistIndexIndicator(high=high, low=low, close=close, volume=volume).acc_dist_index()
+
+            elif func_name == 'cmf':
+                w = int(effective_params.get('window', 20))
+                from ta.volume import ChaikinMoneyFlowIndicator
+                return ChaikinMoneyFlowIndicator(high=high, low=low, close=close, volume=volume, window=w).chaikin_money_flow()
+
+            elif func_name == 'force_index':
+                w = int(effective_params.get('window', 13))
+                from ta.volume import ForceIndexIndicator
+                return ForceIndexIndicator(close=close, volume=volume, window=w).force_index()
+
+            elif func_name == 'eom':
+                w = int(effective_params.get('window', 14))
+                from ta.volume import EaseOfMovementIndicator
+                return EaseOfMovementIndicator(high=high, low=low, volume=volume, window=w).ease_of_movement()
+
+            elif func_name == 'nvi':
+                from ta.volume import NegativeVolumeIndexIndicator
+                return NegativeVolumeIndexIndicator(close=close, volume=volume).negative_volume_index()
+
+            elif func_name == 'vpt':
+                from ta.volume import VolumePriceTrendIndicator
+                return VolumePriceTrendIndicator(close=close, volume=volume).volume_price_trend()
+
+            # === 5. RETURNS & OTHERS ===
+            elif func_name == 'daily_return':
+                from ta.others import DailyReturnIndicator
+                return DailyReturnIndicator(close=close).daily_return()
+
+            elif func_name == 'daily_log_return':
+                from ta.others import DailyLogReturnIndicator
+                return DailyLogReturnIndicator(close=close).daily_log_return()
+
+            elif func_name == 'cum_return':
+                from ta.others import CumulativeReturnIndicator
+                return CumulativeReturnIndicator(close=close).cumulative_return()
 
         except Exception as err:
             print(f"[Indicator calculation fallback for {indicator_name}]: {err}")
-            l = int(effective_params.get('length', 14))
-            return close.rolling(window=max(2, l)).mean()
+            return close.rolling(window=14).mean()
 
         return close.rolling(window=14).mean()
 

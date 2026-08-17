@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Globe, FileSpreadsheet } from 'lucide-react';
+import { Globe, FileSpreadsheet, Calendar } from 'lucide-react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
 import Select from '../common/Select';
@@ -45,10 +45,14 @@ const StepDataSource: React.FC = () => {
     value: d.id
   }));
 
+  const isInvalidDates = Boolean(ds.startDate && ds.endDate && new Date(ds.startDate) >= new Date(ds.endDate));
+
   return (
     <div className={styles.stepContainer}>
-      <h2 className={styles.stepTitle}>Data Source</h2>
-      <p className={styles.stepSubtitle}>Select where to get your historical market data for strategy discovery.</p>
+      <h2 className={styles.stepTitle}>Data Source & Historical Range</h2>
+      <p className={styles.stepSubtitle}>
+        Select market provider, symbol, bar timeframe, and mandatory date boundaries for genetic discovery.
+      </p>
 
       <div className={styles.tabsContainer}>
         <div 
@@ -71,10 +75,12 @@ const StepDataSource: React.FC = () => {
         {ds.source === 'yfinance' ? (
           <div>
             <Input 
-              label="Symbol" 
+              label="Symbol *" 
               value={ds.symbol}
               onChange={(e) => updateDataSource({ symbol: e.target.value.toUpperCase() })}
               placeholder="e.g. BTC-USD, AAPL, EURUSD=X, ^NDX"
+              required
+              error={!ds.symbol ? 'Symbol is required' : undefined}
               tooltipTitle="Trading Asset / Symbol"
               tooltip="Ticker del activo financiero a descargar desde Yahoo Finance (ej. BTC-USD para cripto, EURUSD=X para forex, AAPL para acciones, ^NDX para NASDAQ)."
             />
@@ -96,7 +102,7 @@ const StepDataSource: React.FC = () => {
         ) : (
           <div>
             <Select 
-              label="Select Uploaded Dataset (MT5 / CSV)"
+              label="Select Uploaded Dataset (MT5 / CSV) *"
               options={
                 csvOptions.length > 0
                   ? [{ label: '-- Choose a dataset --', value: '' }, ...csvOptions]
@@ -116,7 +122,7 @@ const StepDataSource: React.FC = () => {
         )}
 
         <Select 
-          label="Timeframe"
+          label="Timeframe *"
           value={ds.timeframe}
           onChange={(e) => updateDataSource({ timeframe: e.target.value })}
           options={[
@@ -133,24 +139,45 @@ const StepDataSource: React.FC = () => {
           tooltip="Duración de cada vela japonesa para el cálculo de indicadores y ejecución de señales."
         />
 
-        <Input 
-          type="date"
-          label="Start Date"
-          value={ds.startDate}
-          onChange={(e) => updateDataSource({ startDate: e.target.value })}
-          tooltipTitle="Backtest Start Date"
-          tooltip="Fecha inicial del período de entrenamiento y backtest."
-        />
+        <div>
+          <Input 
+            type="date"
+            label="Start Date * (Obligatorio)"
+            value={ds.startDate}
+            onChange={(e) => updateDataSource({ startDate: e.target.value })}
+            required
+            error={!ds.startDate ? 'Start Date is mandatory' : undefined}
+            tooltipTitle="Backtest Start Date"
+            tooltip="Fecha inicial obligatoria del período de entrenamiento y backtest."
+          />
+        </div>
 
-        <Input 
-          type="date"
-          label="End Date"
-          value={ds.endDate}
-          onChange={(e) => updateDataSource({ endDate: e.target.value })}
-          tooltipTitle="Backtest End Date"
-          tooltip="Fecha final del período histórico."
-        />
+        <div>
+          <Input 
+            type="date"
+            label="End Date * (Obligatorio)"
+            value={ds.endDate}
+            onChange={(e) => updateDataSource({ endDate: e.target.value })}
+            required
+            error={
+              !ds.endDate 
+                ? 'End Date is mandatory' 
+                : isInvalidDates 
+                ? 'End Date must be after Start Date' 
+                : undefined
+            }
+            tooltipTitle="Backtest End Date"
+            tooltip="Fecha final obligatoria del período histórico."
+          />
+        </div>
       </div>
+
+      {isInvalidDates && (
+        <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: '6px', background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.3)', color: 'var(--color-accent-rose)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Calendar size={16} />
+          <span>Error de validación: La fecha final (End Date) debe ser posterior a la fecha inicial (Start Date).</span>
+        </div>
+      )}
     </div>
   );
 };

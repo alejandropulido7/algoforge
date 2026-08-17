@@ -1,7 +1,7 @@
 import React from 'react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
-import { ShieldCheck, Scale, Target, Percent, Sliders, Layers } from 'lucide-react';
+import { ShieldCheck, Scale, Target, Percent, Sliders, Layers, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react';
 import styles from '../../styles/pages.module.css';
 
 export const StepRiskManagement: React.FC = () => {
@@ -11,6 +11,7 @@ export const StepRiskManagement: React.FC = () => {
     sizingMode: 'lots',
     lotSize: 0.1,
     riskPct: 1.0,
+    direction: 'both',
     slType: 'pips',
     slPips: 50.0,
     slAtrMult: 1.5,
@@ -21,6 +22,8 @@ export const StepRiskManagement: React.FC = () => {
     pointSize: 0.0001,
   };
 
+  const currentDir = risk.direction || 'both';
+
   return (
     <div className={styles.stepContainer}>
       <div style={{ marginBottom: '1.5rem' }}>
@@ -29,8 +32,107 @@ export const StepRiskManagement: React.FC = () => {
           Risk & Money Management
         </h2>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-          Configure position sizing, Stop Loss, Take Profit, and contract parameters matching MT5 execution.
+          Configure trade direction, position sizing, Stop Loss, Take Profit, and contract parameters matching MT5 execution.
         </p>
+      </div>
+
+      {/* Trade Direction Selector Banner */}
+      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <ArrowLeftRight size={18} color="var(--color-accent-cyan)" />
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+            Allowed Trade Direction
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Select whether the generated strategies should seek buy setups, short setups, or both market directions.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+          <button
+            type="button"
+            onClick={() => updateRisk({ direction: 'both' })}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '0.375rem',
+              padding: '0.875rem 1rem',
+              borderRadius: '6px',
+              border: currentDir === 'both' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+              background: currentDir === 'both' ? 'rgba(0, 212, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              textAlign: 'left'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ArrowLeftRight size={16} color={currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
+                Long & Short
+              </span>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+              Trades both bullish buy signals and bearish sell signals.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateRisk({ direction: 'long' })}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '0.375rem',
+              padding: '0.875rem 1rem',
+              borderRadius: '6px',
+              border: currentDir === 'long' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+              background: currentDir === 'long' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              textAlign: 'left'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={16} color={currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>
+                Long Only (Compras)
+              </span>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+              Only executes buy orders, suitable for spot or trending bull markets.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateRisk({ direction: 'short' })}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '0.375rem',
+              padding: '0.875rem 1rem',
+              borderRadius: '6px',
+              border: currentDir === 'short' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
+              background: currentDir === 'short' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              textAlign: 'left'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingDown size={16} color={currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-main)' }}>
+                Short Only (Ventas)
+              </span>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+              Only executes sell short orders, ideal for hedging or bear market regimes.
+            </span>
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
@@ -223,7 +325,7 @@ export const StepRiskManagement: React.FC = () => {
 
           {risk.slType === 'none' && (
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will remain open until an opposite sell/buy signal is generated.
+              Positions will remain open until an opposite exit signal is generated.
             </div>
           )}
         </div>
@@ -318,7 +420,7 @@ export const StepRiskManagement: React.FC = () => {
 
           {risk.tpType === 'none' && (
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will close only upon reaching an opposite exit signal or Stop Loss.
+              Positions will close only upon reaching an opposite exit signal.
             </div>
           )}
         </div>

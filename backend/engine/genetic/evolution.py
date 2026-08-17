@@ -5,7 +5,6 @@ import pandas as pd
 from deap import base, creator, tools, gp
 from .primitives import create_primitive_set
 from .fitness import evaluate_fitness, evaluate_strategy_signals
-from ..backtester.vectorbt_engine import VectorBTEngine
 
 class StrategyEvolver:
     """Evolves trading strategies using Genetic Programming (DEAP) matching MT5 risk settings."""
@@ -30,6 +29,14 @@ class StrategyEvolver:
         self.mut_prob = mutation_prob
         self.tourn_size = tournament_size
         self.risk_config = risk_config or {}
+
+        # Fast training sample for lightning-fast GP search across 50 generations
+        if len(self.df) > 2500:
+            self.eval_df = self.df.iloc[-2500:].copy().reset_index(drop=True)
+            self.eval_indicators = [arr[-2500:] for arr in self.indicator_arrays]
+        else:
+            self.eval_df = self.df
+            self.eval_indicators = self.indicator_arrays
 
         self.pset = create_primitive_set(len(self.indicator_names))
         for i, name in enumerate(self.indicator_names):
@@ -58,11 +65,17 @@ class StrategyEvolver:
 
     def _evaluate_individual(self, individual):
         func = self.toolbox.compile(expr=individual)
-        score, _ = evaluate_fitness(func, self.indicator_arrays, self.df, risk_config=self.risk_config)
+        score, _ = evaluate_fitness(
+            func, 
+            self.eval_indicators, 
+            self.eval_df, 
+            risk_config=self.risk_config, 
+            tree_len=len(individual)
+        )
         return (score,)
 
     def evolve(self, progress_callback=None) -> list[dict]:
-        """Run the GP evolution loop and return top strategies."""
+        """Run the GP evolution loop and return top strategies evaluated on full dataset."""
         pop = self.toolbox.population(n=self.pop_size)
         hof = tools.HallOfFame(20)
 
@@ -104,10 +117,24 @@ class StrategyEvolver:
                 )
 
         results = []
+        direction = self.risk_config.get("direction", "both")
+        
+        # Evaluate Top Finalists on 100% full dataset
         for i, ind in enumerate(hof):
             func = self.toolbox.compile(expr=ind)
-            sharpe, bt_res = evaluate_fitness(func, self.indicator_arrays, self.df, risk_config=self.risk_config)
-            entries, exits = evaluate_strategy_signals(func, self.indicator_arrays, len(self.df))
+            sharpe, bt_res = evaluate_fitness(
+                func, 
+                self.indicator_arrays, 
+                self.df, 
+                risk_config=self.risk_config,
+                tree_len=len(ind)
+            )
+            entries, exits = evaluate_strategy_signals(
+                func, 
+                self.indicator_arrays, 
+                len(self.df),
+                direction=direction
+            )
             results.append({
                 "id": f"gp_strategy_{i+1}",
                 "tree": str(ind),

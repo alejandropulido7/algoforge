@@ -141,3 +141,14 @@ export const exportStrategy = async (id: string, format: string): Promise<{ code
   if (!response.ok) throw new Error('Failed to export strategy');
   return response.json();
 };
+
+export const downloadOnnxModel = async (strategyId: string): Promise<Blob> => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers: HeadersInit = {};
+  if (session) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+  const response = await fetch(`${API_URL}/export/${strategyId}/onnx`, { headers });
+  if (!response.ok) throw new Error('Failed to download ONNX model file');
+  return response.blob();
+};

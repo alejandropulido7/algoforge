@@ -12,6 +12,7 @@ class StrategyPipeline:
 
     def __init__(self, config: dict):
         self.config = config
+        self.job_id = config.get("id") or config.get("job_id") or "default_job"
         self.risk_config = config.get("risk", {
             "initialDeposit": 10000.0,
             "sizingMode": "lots",
@@ -73,13 +74,18 @@ class StrategyPipeline:
         rl_cfg = self.config.get("rl", {})
         if rl_cfg.get("enabled", False):
             if progress_callback:
-                progress_callback(phase="rl", progress=55, message="Training RL trading agent")
+                progress_callback(phase="rl", progress=55, message="Training RL trading agent & Exporting ONNX")
             trainer = RLTrainer(
                 algorithm=rl_cfg.get("algorithm", "ppo"),
                 total_timesteps=rl_cfg.get("timesteps", 10000),
                 learning_rate=rl_cfg.get("learningRate", 0.0003)
             )
-            _, rl_info = trainer.train(df, indicators)
+            _, rl_info = trainer.train(
+                df=df,
+                indicators=indicators,
+                job_id=self.job_id,
+                strategy_id=f"rl_{rl_cfg.get('algorithm', 'ppo')}"
+            )
             bt_rl = self.backtester.backtest(df, rl_info["entries"], rl_info["exits"])
             gp_strategies.append({
                 "id": f"rl_agent_{rl_cfg.get('algorithm', 'ppo')}",
@@ -87,7 +93,13 @@ class StrategyPipeline:
                 "fitness": bt_rl.sharpe_ratio,
                 "entries": rl_info["entries"],
                 "exits": rl_info["exits"],
-                "backtest": bt_rl
+                "backtest": bt_rl,
+                "is_rl": True,
+                "onnx_filename": rl_info.get("onnx_filename"),
+                "onnx_path": rl_info.get("onnx_path"),
+                "zip_path": rl_info.get("zip_path"),
+                "window_size": rl_info.get("window_size", 20),
+                "n_features": rl_info.get("n_features", 5 + len(indicators))
             })
 
         # 4. Backtesting & Monte Carlo Validation
@@ -108,6 +120,13 @@ class StrategyPipeline:
             candidate_results.append({
                 "id": strat["id"],
                 "strategy_tree": strat["tree"],
+                "is_rl": strat.get("is_rl", False),
+                "job_id": self.job_id,
+                "onnx_filename": strat.get("onnx_filename", f"AlgoForge_Job_{self.job_id}.onnx"),
+                "onnx_path": strat.get("onnx_path", ""),
+                "zip_path": strat.get("zip_path", ""),
+                "window_size": strat.get("window_size", 20),
+                "n_features": strat.get("n_features", 5),
                 "total_return_pct": float(bt.total_return),
                 "total_net_profit": float(bt.total_net_profit),
                 "gross_profit": float(bt.gross_profit),

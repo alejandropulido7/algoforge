@@ -14,10 +14,10 @@ class MonteCarloResult:
     robustness_score: float
 
 class MonteCarloSimulator:
-    """Simulates alternate market paths through trade permutation and bootstrapping."""
+    """Simulates alternate market paths through vectorized trade permutation and bootstrapping."""
 
-    def __init__(self, n_simulations: int = 1000, ruin_threshold: float = 0.5):
-        self.n_simulations = n_simulations
+    def __init__(self, n_simulations: int = 500, ruin_threshold: float = 0.5):
+        self.n_simulations = min(1000, max(50, n_simulations))
         self.ruin_threshold = ruin_threshold
 
     def simulate(
@@ -27,8 +27,8 @@ class MonteCarloSimulator:
         n_simulations: int | None = None,
         method: str = "permutation"
     ) -> MonteCarloResult:
-        n_sims = n_simulations or self.n_simulations
-        trades = np.asarray(trade_pnls)
+        n_sims = min(1000, max(50, n_simulations or self.n_simulations))
+        trades = np.asarray(trade_pnls, dtype=np.float64)
         n_trades = len(trades)
 
         if n_trades == 0:
@@ -44,61 +44,48 @@ class MonteCarloSimulator:
                 robustness_score=0.0
             )
 
-        simulated_curves = []
-        max_drawdowns = []
-        final_balances = []
-        sharpe_ratios = []
-
         # Original curve
         orig_equity = [initial_balance]
-        for pnl in trades:
-            # Handle percentage pnl or absolute pnl
-            if abs(pnl) < 2.0:
-                orig_equity.append(orig_equity[-1] * (1.0 + pnl))
-            else:
-                orig_equity.append(orig_equity[-1] + pnl)
+        cum_orig = initial_balance + np.cumsum(trades)
+        orig_equity.extend([float(x) for x in cum_orig])
 
         ruin_balance = initial_balance * (1.0 - self.ruin_threshold)
-        ruin_count = 0
 
-        for _ in range(n_sims):
-            if method == "bootstrap":
-                shuffled = np.random.choice(trades, size=n_trades, replace=True)
-            else:
-                shuffled = np.random.permutation(trades)
+        # Fast Vectorized Monte Carlo Matrix
+        if method == "bootstrap":
+            sim_indices = np.random.randint(0, n_trades, size=(n_sims, n_trades))
+            sim_trades = trades[sim_indices]
+        else:
+            sim_trades = np.tile(trades, (n_sims, 1))
+            for row in sim_trades:
+                np.random.shuffle(row)
 
-            curve = [initial_balance]
-            hit_ruin = False
-            for pnl in shuffled:
-                val = curve[-1] * (1.0 + pnl) if abs(pnl) < 2.0 else curve[-1] + pnl
-                curve.append(max(0.0, val))
-                if curve[-1] <= ruin_balance:
-                    hit_ruin = True
+        cum_matrix = initial_balance + np.cumsum(sim_trades, axis=1)  # shape (n_sims, n_trades)
+        full_curves = np.column_stack([np.full(n_sims, initial_balance), cum_matrix])
 
-            if hit_ruin:
-                ruin_count += 1
+        # Min balance & ruin
+        min_balances = np.min(full_curves, axis=1)
+        ruin_count = int(np.sum(min_balances <= ruin_balance))
 
-            curve_arr = np.array(curve)
-            peak = np.maximum.accumulate(curve_arr)
-            dd = (peak - curve_arr) / (peak + 1e-8)
-            max_dd = float(np.max(dd))
+        # Peak & Drawdowns vectorized
+        peaks = np.maximum.accumulate(full_curves, axis=1)
+        drawdowns = (peaks - full_curves) / (peaks + 1e-8)
+        max_drawdowns = np.max(drawdowns, axis=1).tolist()
+        final_balances = full_curves[:, -1].tolist()
 
-            # Returns for Sharpe
-            rets = np.diff(curve_arr) / (curve_arr[:-1] + 1e-8)
-            sh = float(np.mean(rets) / (np.std(rets) + 1e-8)) if len(rets) > 1 else 0.0
+        # Sharpe ratios
+        returns = np.diff(full_curves, axis=1) / (full_curves[:, :-1] + 1e-8)
+        means = np.mean(returns, axis=1)
+        stds = np.std(returns, axis=1) + 1e-8
+        sharpe_ratios = (means / stds).tolist()
 
-            max_drawdowns.append(max_dd)
-            final_balances.append(float(curve[-1]))
-            sharpe_ratios.append(sh)
-            if len(simulated_curves) < 30:
-                simulated_curves.append(curve)
+        simulated_curves = [full_curves[k].tolist() for k in range(min(30, n_sims))]
 
         prob_ruin = float(ruin_count / n_sims)
         conf_95_dd = float(np.percentile(max_drawdowns, 95))
         pct_returns = [(b - initial_balance) / initial_balance for b in final_balances]
         conf_95_return = float(np.percentile(pct_returns, 5))
 
-        # Robustness score: 0 to 100
         profitable_pct = sum(1 for b in final_balances if b > initial_balance) / n_sims
         robustness = (
             profitable_pct * 0.4 +
