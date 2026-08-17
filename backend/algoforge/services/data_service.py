@@ -26,11 +26,38 @@ class DataService:
     }
 
     @staticmethod
-    def _read_index() -> list[dict]:
+    def _normalize_date_str(val: str) -> str:
+        if not val or str(val).strip() in ["N/A", "nan", "None", ""]:
+            return ""
+        s = str(val).strip().replace(".", "-").replace("/", "-")
+        m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})", s)
+        if m:
+            y, mth, d = m.groups()
+            return f"{int(y):04d}-{int(mth):02d}-{int(d):02d}"
+        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})", s)
+        if m2:
+            d, mth, y = m2.groups()
+            return f"{int(y):04d}-{int(mth):02d}-{int(d):02d}"
+        try:
+            dt = pd.to_datetime(s, errors="coerce")
+            if pd.notnull(dt):
+                return dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+        return s[:10]
+
+    @classmethod
+    def _read_index(cls) -> list[dict]:
         if os.path.exists(INDEX_FILE):
             try:
                 with open(INDEX_FILE, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    for item in data:
+                        if "start_date" in item:
+                            item["start_date"] = cls._normalize_date_str(item["start_date"])
+                        if "end_date" in item:
+                            item["end_date"] = cls._normalize_date_str(item["end_date"])
+                    return data
             except Exception:
                 return []
         return []
@@ -130,8 +157,8 @@ class DataService:
         csv_path = os.path.join(STORAGE_DIR, csv_filename)
         df.to_csv(csv_path, index=False)
 
-        start_date = str(df.iloc[0].get("Timestamp", df.iloc[0].get("Date", "N/A")))[:10]
-        end_date = str(df.iloc[-1].get("Timestamp", df.iloc[-1].get("Date", "N/A")))[:10]
+        start_date = self._normalize_date_str(str(df.iloc[0].get("Timestamp", df.iloc[0].get("Date", "N/A"))))
+        end_date = self._normalize_date_str(str(df.iloc[-1].get("Timestamp", df.iloc[-1].get("Date", "N/A"))))
 
         record = {
             "id": dataset_id,

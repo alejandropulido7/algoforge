@@ -18,7 +18,8 @@ class StrategyEvolver:
         crossover_prob: float = 0.7,
         mutation_prob: float = 0.2,
         tournament_size: int = 3,
-        risk_config: dict | None = None
+        risk_config: dict | None = None,
+        top_strategies_count: int = 20
     ):
         self.df = ohlcv_data
         self.indicator_names = list(indicator_values.keys())
@@ -29,6 +30,7 @@ class StrategyEvolver:
         self.mut_prob = mutation_prob
         self.tourn_size = tournament_size
         self.risk_config = risk_config or {}
+        self.top_strategies_count = max(1, int(top_strategies_count))
 
         # Fast training sample for lightning-fast GP search across 50 generations
         if len(self.df) > 2500:
@@ -77,7 +79,7 @@ class StrategyEvolver:
     def evolve(self, progress_callback=None) -> list[dict]:
         """Run the GP evolution loop and return top strategies evaluated on full dataset."""
         pop = self.toolbox.population(n=self.pop_size)
-        hof = tools.HallOfFame(20)
+        hof = tools.HallOfFame(self.top_strategies_count)
 
         fitnesses = list(map(self.toolbox.evaluate, pop))
         for ind, fit in zip(pop, fitnesses):

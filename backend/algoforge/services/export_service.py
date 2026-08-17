@@ -14,21 +14,63 @@ def register_local_strategy(strategy: dict):
 
 def get_strategy_by_id(strategy_id: str) -> dict:
     client = get_supabase_client()
+    strat: dict | None = None
     try:
         res = client.table("strategies").select("*").eq("id", strategy_id).single().execute()
         if res.data:
-            return res.data
+            strat = dict(res.data)
     except Exception:
         pass
-    return _LOCAL_STRATEGIES.get(strategy_id, {
-        "id": strategy_id,
-        "rank": 1,
-        "total_score": 50.0,
-        "sharpe_ratio": 1.0,
-        "mc_robustness": 80.0,
-        "strategy_tree": "gt(RSI, c_50)",
-        "is_rl": False
-    })
+
+    if not strat:
+        strat = dict(_LOCAL_STRATEGIES.get(strategy_id, {
+            "id": strategy_id,
+            "rank": 1,
+            "total_score": 50.0,
+            "sharpe_ratio": 1.0,
+            "mc_robustness": 80.0,
+            "strategy_tree": "gt(RSI, c_50)",
+            "is_rl": False
+        }))
+
+    # Enrich strategy with parent job configuration (Risk, Indicators, Monte Carlo, Symbol/Timeframe)
+    job_id = strat.get("job_id")
+    if job_id:
+        try:
+            from algoforge.services.job_service import get_job_status
+            job_record = get_job_status(job_id)
+            if job_record and "config" in job_record:
+                job_cfg = job_record.get("config", {})
+
+                # 1. Enrich risk_config
+                if not strat.get("risk_config") or strat.get("risk_config") == {}:
+                    if "risk" in job_cfg and job_cfg["risk"]:
+                        strat["risk_config"] = job_cfg["risk"]
+                    elif "risk_config" in strat.get("exit_rules", {}):
+                        strat["risk_config"] = strat["exit_rules"]["risk_config"]
+
+                # 2. Enrich indicator_config / indicatorParams
+                if not strat.get("indicator_config") or strat.get("indicator_config") == {}:
+                    ind_params = job_cfg.get("indicatorParams", {})
+                    inds = job_cfg.get("indicators", [])
+                    strat["indicator_config"] = [{"name": ind, "params": ind_params.get(ind, {})} for ind in inds]
+
+                # 3. Enrich symbol / timeframe / montecarlo
+                data_src = job_cfg.get("dataSource", {})
+                if not strat.get("symbol"):
+                    strat["symbol"] = data_src.get("symbol") or job_cfg.get("symbol") or "EURUSD"
+                if not strat.get("timeframe"):
+                    strat["timeframe"] = data_src.get("timeframe") or job_cfg.get("timeframe") or "H1"
+                strat["montecarlo_config"] = job_cfg.get("montecarlo", {})
+        except Exception as err:
+            print(f"[get_strategy_by_id job enrichment notice]: {err}")
+
+    # Fallback risk_config if still missing
+    if not strat.get("risk_config") or strat.get("risk_config") == {}:
+        if "risk_config" in strat.get("exit_rules", {}):
+            strat["risk_config"] = strat["exit_rules"]["risk_config"]
+
+    return strat
 
 def export_strategy(strategy_id: str, format_type: str) -> str:
     strategy = get_strategy_by_id(strategy_id)

@@ -31,6 +31,18 @@ def _normalize_config(raw: dict) -> dict:
             "lotSize": 0.1,
             "riskPct": 1.0,
             "direction": "both",
+            "strategyApproach": "all",
+            "orderType": "market",
+            "pendingTimeoutBars": 3,
+            "pendingOffsetPips": 5.0,
+            "maxHoldingBars": 0,
+            "consecutiveLossAction": "none",
+            "consecutiveLossThreshold": 3,
+            "consecutiveLossReductionPct": 50.0,
+            "consecutiveLossReactivation": "none",
+            "consecutiveLossCooldownBars": 20,
+            "consecutiveLossCooldownDays": 1,
+            "consecutiveLossAutoCooldown": True,
             "slType": "pips",
             "slPips": 50.0,
             "slAtrMult": 1.5,
@@ -47,7 +59,8 @@ def _normalize_config(raw: dict) -> dict:
             "populationSize": 100,
             "generations": 50,
             "crossoverProb": 0.7,
-            "mutationProb": 0.1
+            "mutationProb": 0.1,
+            "topStrategiesCount": 20
         }
     
     if "rl" not in config or not config["rl"]:

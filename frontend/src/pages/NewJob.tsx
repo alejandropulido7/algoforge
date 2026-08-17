@@ -11,7 +11,7 @@ import StepReview from '../components/configurator/StepReview';
 import Button from '../components/common/Button';
 import styles from '../styles/pages.module.css';
 
-const STEPS = ['Data', 'Indicators', 'Risk & Sizing', 'AI Config', 'Review'];
+const STEPS = ['Data', 'Indicators', 'Strategy config', 'AI & Monte Carlo', 'Review'];
 
 const NewJob: React.FC = () => {
   const { currentStep, config, nextStep, prevStep } = useJobStore();

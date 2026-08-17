@@ -4,9 +4,9 @@ import {
   Calendar, 
   Layers, 
   ShieldCheck, 
-  Dna, 
   ChevronDown, 
-  ChevronUp
+  ChevronUp,
+  Clock
 } from 'lucide-react';
 import type { JobConfig } from '../../types/job';
 
@@ -30,13 +30,16 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
   const indicators = config.indicators || [];
   const risk = (config as any).risk || {};
   const genetic = config.genetic || {};
-  const rl = config.rl || {};
-  const mc = config.montecarlo || {};
 
   const directionLabel = 
     risk.direction === 'long' || risk.direction === 'long_only' ? 'Long Only 🟢' :
     risk.direction === 'short' || risk.direction === 'short_only' ? 'Short Only 🔴' : 
     'Long & Short 🔄';
+
+  const orderTypeLabel = 
+    risk.orderType === 'stop' ? 'Buy/Sell Stop ⏳' :
+    risk.orderType === 'limit' ? 'Buy/Sell Limit 🎯' :
+    'On Market ⚡';
 
   return (
     <div style={{
@@ -71,7 +74,7 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
             padding: '0.125rem 0.5rem', 
             borderRadius: '4px' 
           }}>
-            {symbol} • {timeframe} • {startDate} ➔ {endDate}
+            {symbol} • {timeframe} • {orderTypeLabel} • {startDate} ➔ {endDate}
           </span>
         </div>
 
@@ -135,7 +138,7 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
               {indicators.length > 0 ? (
-                indicators.map((ind, i) => (
+                indicators.map((ind: string, i: number) => (
                   <span
                     key={i}
                     style={{
@@ -161,16 +164,26 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
           <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.75rem', color: 'var(--color-accent-cyan)', fontWeight: 600, fontSize: '0.8125rem' }}>
               <ShieldCheck size={15} />
-              <span>Risk & Trade Management</span>
+              <span>Strategy & Trade Management</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8125rem' }}>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>ENFOQUE ESTRATEGIA</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-accent-amber)' }}>{
+                  risk.strategyApproach === 'break_retest' ? 'Break & Retest' :
+                  risk.strategyApproach === 'fakeout' ? 'Fakeout (Reversión)' :
+                  risk.strategyApproach === 'breakout' ? 'Breakout Directo' :
+                  risk.strategyApproach === 'reversion' ? 'Reversión Tendencia' :
+                  risk.strategyApproach === 'pullback' ? 'Pullback Dinámico' : 'Cualquiera (Auto)'
+                }</span>
+              </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>DIRECTION</span>
                 <span style={{ fontWeight: 600, color: 'var(--color-accent-emerald)' }}>{directionLabel}</span>
               </div>
               <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>RISK / TRADE</span>
-                <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>{risk.riskPct || 1}%</span>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>EXECUTION MODE</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-accent-cyan)' }}>{orderTypeLabel}</span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>STOP LOSS</span>
@@ -184,42 +197,59 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
                   {risk.tpAtrMult ? `${risk.tpAtrMult}x ATR` : `${risk.tpPips || 100} pips`}
                 </span>
               </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>RACHA PÉRDIDAS</span>
+                <span style={{ color: risk.consecutiveLossAction !== 'none' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
+                  {risk.consecutiveLossAction === 'reduce_risk' ? `Reducir ${risk.consecutiveLossReductionPct || 50}% tras ${risk.consecutiveLossThreshold || 3}L` :
+                   risk.consecutiveLossAction === 'stop_bot' ? `Pausar tras ${risk.consecutiveLossThreshold || 3}L` : 'Normal'}
+                </span>
+                {risk.consecutiveLossAction === 'stop_bot' && (
+                  <span style={{ display: 'block', fontSize: '0.6875rem', color: 'var(--color-accent-cyan)', marginTop: '0.125rem' }}>
+                    {risk.consecutiveLossReactivation === 'cooldown_bars' ? (risk.consecutiveLossAutoCooldown ? 'Auto Cooldown IA' : `${risk.consecutiveLossCooldownBars || 20} velas cooldown`) :
+                     risk.consecutiveLossReactivation === 'next_session' ? 'Reactivar prox sesión' :
+                     risk.consecutiveLossReactivation === 'next_day' ? 'Reactivar prox día' :
+                     risk.consecutiveLossReactivation === 'days_count' ? `Reactivar en ${risk.consecutiveLossCooldownDays || 1}d` :
+                     risk.consecutiveLossReactivation === 'next_week' ? 'Reactivar prox semana' : 'Reinicio manual'}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Section 4: AI & Exploration Parameters */}
+          {/* Section 4: Timing & Candle Counts */}
           <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.75rem', color: 'var(--color-accent-cyan)', fontWeight: 600, fontSize: '0.8125rem' }}>
-              <Dna size={15} />
-              <span>AI Search & Monte Carlo</span>
+              <Clock size={15} />
+              <span>Timing & Algoritmo</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8125rem' }}>
               <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>PENDING TIMEOUT</span>
+                <span style={{ color: 'var(--color-text-main)', fontWeight: 500 }}>
+                  {risk.pendingTimeoutBars || 3} velas ({risk.pendingOffsetPips || 5} pips)
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>TIME-BASED EXIT</span>
+                <span style={{ color: risk.maxHoldingBars ? 'var(--color-accent-amber)' : 'var(--color-text-muted)', fontWeight: 500 }}>
+                  {risk.maxHoldingBars ? `${risk.maxHoldingBars} velas` : 'Disabled'}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>TOP ESTRATEGIAS</span>
+                <span style={{ color: 'var(--color-accent-cyan)', fontWeight: 600 }}>
+                  {genetic.topStrategiesCount || 20} Estrategias
+                </span>
+              </div>
+              <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>GENETIC POOL</span>
                 <span style={{ color: 'var(--color-text-main)', fontWeight: 500 }}>
-                  {genetic.populationSize || 100} pop × {genetic.generations || 50} gen
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>DEEP RL (PPO)</span>
-                <span style={{ color: rl.enabled ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)', fontWeight: 500 }}>
-                  {rl.enabled ? `${rl.algorithm?.toUpperCase() || 'PPO'} (${rl.timesteps || 100000} steps)` : 'Disabled'}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>MONTE CARLO</span>
-                <span style={{ color: 'var(--color-text-main)', fontWeight: 500 }}>
-                  {mc.simulations || 1000} sims ({mc.method || 'Permutation'})
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>RUIN THRESHOLD</span>
-                <span style={{ color: 'var(--color-accent-rose)', fontWeight: 500 }}>
-                  {mc.ruinThreshold || 20}%
+                  {genetic.populationSize || 100}p × {genetic.generations || 50}g
                 </span>
               </div>
             </div>
           </div>
+
         </div>
       )}
     </div>

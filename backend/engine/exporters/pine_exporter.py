@@ -45,6 +45,12 @@ class PineScriptExporter:
 
         calcs_code = "\n".join(calcs)
 
+        risk_cfg = strategy.get("risk_config", {})
+        direction_str = risk_cfg.get("direction", "both")
+        order_type_str = risk_cfg.get("orderType") or risk_cfg.get("order_type") or "market"
+        max_holding_bars = int(risk_cfg.get("maxHoldingBars") or risk_cfg.get("max_holding_bars") or 0)
+        pending_offset = float(risk_cfg.get("pendingOffsetPips") or risk_cfg.get("pending_offset_pips") or 5.0)
+
         return f"""//@version=5
 //+------------------------------------------------------------------+
 //| AlgoForge Generated Strategy                                     |
@@ -62,18 +68,31 @@ strategy(
     commission_value=0.1
 )
 
+// === Timing & Execution Inputs ===
+inpMaxHoldingBars = input.int({max_holding_bars}, "Max Holding Bars (0 = Disabled)", minval=0)
+inpPendingOffset = input.float({pending_offset}, "Pending Offset (Pips)", minval=0.0)
+
 // === Indicator Calculations ===
 {calcs_code}
 
 // === Evolved Logic Signal ===
 signalVal = {transpiled_expr}
-longCondition  = signalVal > 0
-shortCondition = signalVal < 0
+allowLong  = "{"true" if direction_str in ["both", "long"] else "false"}"
+allowShort = "{"true" if direction_str in ["both", "short"] else "false"}"
+
+longCondition  = allowLong and (signalVal > 0)
+shortCondition = allowShort and (signalVal < 0)
 
 // === Order Execution ===
-if (longCondition)
-    strategy.entry("Long", strategy.long)
+{"// Buy Stop / Sell Stop Orders" if order_type_str == "stop" else ("// Buy Limit / Sell Limit Orders" if order_type_str == "limit" else "// On Market Execution")}
+if (longCondition and strategy.position_size == 0)
+    {"strategy.entry('Long', strategy.long, stop=high[1] + (inpPendingOffset * syminfo.mintick * 10))" if order_type_str == "stop" else ("strategy.entry('Long', strategy.long, limit=low[1] - (inpPendingOffset * syminfo.mintick * 10))" if order_type_str == "limit" else "strategy.entry('Long', strategy.long)")}
 
-if (shortCondition)
-    strategy.entry("Short", strategy.short)
+if (shortCondition and strategy.position_size == 0)
+    {"strategy.entry('Short', strategy.short, stop=low[1] - (inpPendingOffset * syminfo.mintick * 10))" if order_type_str == "stop" else ("strategy.entry('Short', strategy.short, limit=high[1] + (inpPendingOffset * syminfo.mintick * 10))" if order_type_str == "limit" else "strategy.entry('Short', strategy.short)")}
+
+// === Time-Based Exit (Max Holding Bars) ===
+if (inpMaxHoldingBars > 0 and strategy.position_size != 0)
+    if (ta.barssince(strategy.opentrades.entry_bar_index(strategy.opentrades - 1)) >= inpMaxHoldingBars)
+        strategy.close_all(comment="Time Exit")
 """

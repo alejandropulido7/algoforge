@@ -57,6 +57,7 @@ def run_strategy_pipeline(self, job_id: str, config: dict, user_id: str = ""):
             register_local_strategy(strat)
 
             exit_rules_payload = dict(strat.get("exit_rules", {}))
+            exit_rules_payload["risk_config"] = strat.get("risk_config") or config.get("risk", {})
             exit_rules_payload["detailed_metrics"] = {
                 "gross_profit": strat.get("gross_profit", 0.0),
                 "gross_loss": strat.get("gross_loss", 0.0),

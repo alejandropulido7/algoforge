@@ -17,7 +17,31 @@ class RiskConfig(BaseModel):
     initialDeposit: float = 10000.0
     sizingMode: str = "lots"  # "lots" | "risk_pct" | "cash"
     lotSize: float = 0.1
-    riskPct: float = 1.0
+    direction: str = "both"   # "both" | "long" | "short"
+    strategyApproach: str = "all" # "all" | "break_retest" | "fakeout" | "breakout" | "reversion" | "pullback"
+    strategy_approach: Optional[str] = None
+    orderType: str = "market" # "market" | "stop" | "limit" | "any"
+    order_type: Optional[str] = None
+    pendingTimeoutBars: int = 3
+    pending_timeout_bars: Optional[int] = None
+    pendingOffsetPips: float = 5.0
+    pending_offset_pips: Optional[float] = None
+    maxHoldingBars: int = 0   # 0 = disabled
+    max_holding_bars: Optional[int] = None
+    consecutiveLossAction: str = "none" # "none" | "reduce_risk" | "stop_bot"
+    consecutive_loss_action: Optional[str] = None
+    consecutiveLossThreshold: int = 3
+    consecutive_loss_threshold: Optional[int] = None
+    consecutiveLossReductionPct: float = 50.0
+    consecutive_loss_reduction_pct: Optional[float] = None
+    consecutiveLossReactivation: str = "none" # "none" | "cooldown_bars" | "next_session" | "next_day" | "days_count" | "next_week"
+    consecutive_loss_reactivation: Optional[str] = None
+    consecutiveLossCooldownBars: int = 20
+    consecutive_loss_cooldown_bars: Optional[int] = None
+    consecutiveLossCooldownDays: int = 1
+    consecutive_loss_cooldown_days: Optional[int] = None
+    consecutiveLossAutoCooldown: bool = True
+    consecutive_loss_auto_cooldown: Optional[bool] = None
     slType: str = "pips"      # "pips" | "atr" | "none"
     slPips: float = 50.0
     slAtrMult: float = 1.5
@@ -34,6 +58,8 @@ class GeneticConfig(BaseModel):
     generations: int = 50
     crossoverProb: float = 0.7
     mutationProb: float = 0.1
+    topStrategiesCount: int = 20
+    top_strategies_count: Optional[int] = None
 
 class RLConfig(BaseModel):
     model_config = ConfigDict(extra="allow")

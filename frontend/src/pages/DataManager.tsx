@@ -130,12 +130,34 @@ const DataManager: React.FC = () => {
     }
   };
 
+  const normalizeDate = (val?: string): string => {
+    if (!val) return '';
+    const clean = val.replace(/\./g, '-').replace(/\//g, '-').trim();
+    const matchIso = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (matchIso) {
+      const [, y, m, d] = matchIso;
+      return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    const matchDmy = clean.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (matchDmy) {
+      const [, d, m, y] = matchDmy;
+      return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    const parsed = new Date(clean);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return clean.slice(0, 10);
+  };
+
   const handleUseInStrategy = (dataset: DataSource) => {
+    const sDate = normalizeDate(dataset.startDate || dataset.start_date);
+    const eDate = normalizeDate(dataset.endDate || dataset.end_date);
     updateDataSource({
       symbol: dataset.symbol,
       timeframe: dataset.timeframe,
-      startDate: dataset.startDate || dataset.start_date || '2023-01-01',
-      endDate: dataset.endDate || dataset.end_date || '2024-01-01',
+      startDate: sDate || '2023-01-01',
+      endDate: eDate || '2024-01-01',
       source: dataset.source === 'yfinance' ? 'yfinance' : 'csv'
     });
     navigate('/jobs/new');

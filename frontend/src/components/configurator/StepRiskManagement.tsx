@@ -1,8 +1,101 @@
 import React from 'react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
-import { ShieldCheck, Scale, Target, Percent, Sliders, Layers, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react';
+import type { StrategyApproach } from '../../types/job';
+import { 
+  Scale, 
+  Target, 
+  Percent, 
+  Sliders, 
+  Layers, 
+  ArrowLeftRight, 
+  TrendingUp, 
+  TrendingDown, 
+  Clock,
+  Zap,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Timer,
+  AlertTriangle,
+  Flame,
+  RotateCcw,
+  Sparkles
+} from 'lucide-react';
 import styles from '../../styles/pages.module.css';
+
+interface StrategyApproachCard {
+  key: StrategyApproach;
+  title: string;
+  badge: string;
+  badgeColor: string;
+  structure: string;
+  entry: string;
+  context: string;
+  example: string;
+}
+
+const STRATEGY_APPROACHES: StrategyApproachCard[] = [
+  {
+    key: 'all',
+    title: 'Cualquiera (Automático / Híbrido)',
+    badge: 'Auto Discovery',
+    badgeColor: 'var(--color-accent-cyan)',
+    structure: 'Exploración combinatoria libre',
+    entry: 'Optimización genética de señales de indicadores y precio',
+    context: 'Cualquier régimen de mercado',
+    example: 'El algoritmo evalúa y genera las mejores combinaciones sin restringir el patrón de entrada.'
+  },
+  {
+    key: 'break_retest',
+    title: 'Break & Retest',
+    badge: 'Continuación',
+    badgeColor: 'var(--color-accent-emerald)',
+    structure: 'Ruptura + retest a zona rota',
+    entry: 'Rechazo o patrón confirmatorio (mecha / engulfing)',
+    context: 'Tendencia fuerte con volumen expansivo',
+    example: '1. Rompe con vela fuerte y volumen creciente.\n2. Retrocede a la zona rota (pullback).\n3. Se forma rechazo (mecha o patrón engulfing).\n4. Entra en la dirección de la ruptura original.'
+  },
+  {
+    key: 'fakeout',
+    title: 'Fakeout (Falsa Ruptura)',
+    badge: 'Reversión / Trampa',
+    badgeColor: 'var(--color-accent-rose)',
+    structure: 'Rompe y vuelve a la estructura previa',
+    entry: 'Reingreso confirmado dentro del rango',
+    context: 'Zonas de liquidez, extremos de sesión, barridos',
+    example: '1. Rompimiento falso por mecha o cierre sin confirmación.\n2. Volumen alto en la mecha (absorción).\n3. Estructura previa intacta.\n4. Entrada cuando el precio regresa dentro del rango.'
+  },
+  {
+    key: 'breakout',
+    title: 'Breakout Directo',
+    badge: 'Impulso / Momentum',
+    badgeColor: 'var(--color-accent-amber)',
+    structure: 'Ruptura directa de consolidación',
+    entry: 'Entrada inmediata con momentum sin esperar retest',
+    context: 'Apertura de sesión NY/Londres o alta volatilidad',
+    example: '1. Vela amplia, cuerpo dominante, volumen alto.\n2. Nivel de consolidación roto claramente.\n3. Entrada directa por momentum (órdenes Stop o Market).'
+  },
+  {
+    key: 'reversion',
+    title: 'Reversión de Tendencia',
+    badge: 'Cambio de Estructura',
+    badgeColor: 'var(--color-accent-rose)',
+    structure: 'Doble techo/suelo, fallo de nuevo extremo (MSS)',
+    entry: 'Pullback al nuevo nivel de quiebre de estructura',
+    context: 'Tendencia extendida (3+ impulsos) y agotamiento',
+    example: '1. Tendencia extendida previa con divergencia.\n2. Quiebre de estructura menor (MSS en temporalidad de entrada).\n3. Entrada en pullback al nuevo punto de ruptura.'
+  },
+  {
+    key: 'pullback',
+    title: 'Pullback en Tendencia',
+    badge: 'Continuación Dinámica',
+    badgeColor: 'var(--color-accent-cyan)',
+    structure: 'Corrección temporal dentro de tendencia activa',
+    entry: 'Rechazo en zona dinámica (EMA, FVG, 50% Fibo)',
+    context: 'Tendencia clara (HH-HL / LH-LL) en sesiones activas',
+    example: '1. Tendencia alcista marcada.\n2. Precio corrige hasta EMA o zona de liquidez con vela de mecha larga.\n3. Vela de confirmación alcista (engulfing/pin bar).\n4. Entrada al cierre con SL debajo del retroceso.'
+  }
+];
 
 export const StepRiskManagement: React.FC = () => {
   const { config, updateRisk } = useJobStore();
@@ -12,6 +105,14 @@ export const StepRiskManagement: React.FC = () => {
     lotSize: 0.1,
     riskPct: 1.0,
     direction: 'both',
+    strategyApproach: 'all',
+    orderType: 'market',
+    pendingTimeoutBars: 3,
+    pendingOffsetPips: 5.0,
+    maxHoldingBars: 0,
+    consecutiveLossAction: 'none',
+    consecutiveLossThreshold: 3,
+    consecutiveLossReductionPct: 50,
     slType: 'pips',
     slPips: 50.0,
     slAtrMult: 1.5,
@@ -23,118 +124,666 @@ export const StepRiskManagement: React.FC = () => {
   };
 
   const currentDir = risk.direction || 'both';
+  const currentOrderType = risk.orderType || 'market';
+  const currentApproach = risk.strategyApproach || 'all';
+  const currentLossAction = risk.consecutiveLossAction || 'none';
 
   return (
     <div className={styles.stepContainer}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <ShieldCheck size={22} color="var(--color-accent-cyan)" />
-          Risk & Money Management
+          <Sparkles size={22} color="var(--color-accent-cyan)" />
+          Strategy config, Enfoque & Gestión de Riesgo
         </h2>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-          Configure trade direction, position sizing, Stop Loss, Take Profit, and contract parameters matching MT5 execution.
+          Selecciona el enfoque de Price Action deseado (Break & Retest, Fakeout, Breakout, Reversión, Pullback), la dirección, el tipo de orden y los mecanismos de protección contra rachas perdedoras.
         </p>
       </div>
 
-      {/* Trade Direction Selector Banner */}
+      {/* 1. Strategy Approach Selector Cards */}
       <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <ArrowLeftRight size={18} color="var(--color-accent-cyan)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <Flame size={18} color="var(--color-accent-amber)" />
           <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-            Allowed Trade Direction
+            Enfoque de Estrategia (Price Action & Estructura)
           </h3>
         </div>
         <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Select whether the generated strategies should seek buy setups, short setups, or both market directions.
+          Define la lógica estructural dominante que el motor de IA priorizará al generar y filtrar las estrategias.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-          <button
-            type="button"
-            onClick={() => updateRisk({ direction: 'both' })}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '0.375rem',
-              padding: '0.875rem 1rem',
-              borderRadius: '6px',
-              border: currentDir === 'both' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
-              background: currentDir === 'both' ? 'rgba(0, 212, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              textAlign: 'left'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ArrowLeftRight size={16} color={currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} />
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
-                Long & Short
-              </span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-              Trades both bullish buy signals and bearish sell signals.
-            </span>
-          </button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '0.875rem' }}>
+          {STRATEGY_APPROACHES.map(app => {
+            const isSelected = currentApproach === app.key;
+            return (
+              <div
+                key={app.key}
+                onClick={() => updateRisk({ strategyApproach: app.key })}
+                style={{
+                  padding: '1rem',
+                  borderRadius: '6px',
+                  border: isSelected ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  background: isSelected ? 'rgba(0, 212, 255, 0.06)' : 'rgba(255, 255, 255, 0.015)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.1)' : 'none'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.9375rem', color: isSelected ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
+                    {app.title}
+                  </span>
+                  <span style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    padding: '0.125rem 0.375rem',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: app.badgeColor,
+                    border: `1px solid ${app.badgeColor}33`
+                  }}>
+                    {app.badge}
+                  </span>
+                </div>
 
-          <button
-            type="button"
-            onClick={() => updateRisk({ direction: 'long' })}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '0.375rem',
-              padding: '0.875rem 1rem',
-              borderRadius: '6px',
-              border: currentDir === 'long' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
-              background: currentDir === 'long' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              textAlign: 'left'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingUp size={16} color={currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)'} />
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>
-                Long Only (Compras)
-              </span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-              Only executes buy orders, suitable for spot or trending bull markets.
-            </span>
-          </button>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                  <div><strong style={{ color: 'var(--color-text-main)' }}>Estructura:</strong> {app.structure}</div>
+                  <div><strong style={{ color: 'var(--color-text-main)' }}>Entrada:</strong> {app.entry}</div>
+                  <div><strong style={{ color: 'var(--color-text-main)' }}>Contexto:</strong> {app.context}</div>
+                </div>
 
-          <button
-            type="button"
-            onClick={() => updateRisk({ direction: 'short' })}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '0.375rem',
-              padding: '0.875rem 1rem',
-              borderRadius: '6px',
-              border: currentDir === 'short' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
-              background: currentDir === 'short' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              textAlign: 'left'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingDown size={16} color={currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)'} />
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-main)' }}>
-                Short Only (Ventas)
-              </span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-              Only executes sell short orders, ideal for hedging or bear market regimes.
-            </span>
-          </button>
+                <div style={{
+                  marginTop: '0.25rem',
+                  padding: '0.5rem',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  borderRadius: '4px',
+                  fontSize: '0.6875rem',
+                  color: 'var(--color-text-muted)',
+                  whiteSpace: 'pre-line',
+                  lineHeight: '1.3'
+                }}>
+                  {app.example}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {/* 2. Direction and Order Execution Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+        
+        {/* Trade Direction Selector */}
+        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <ArrowLeftRight size={18} color="var(--color-accent-cyan)" />
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+              Allowed Trade Direction
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
+            Choose whether strategies seek buy setups, sell short setups, or both directions.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={() => updateRisk({ direction: 'both' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentDir === 'both' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                background: currentDir === 'both' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <ArrowLeftRight size={16} color={currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentDir === 'both' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
+                Long & Short
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateRisk({ direction: 'long' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentDir === 'long' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                background: currentDir === 'long' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <TrendingUp size={16} color={currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentDir === 'long' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>
+                Long Only
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateRisk({ direction: 'short' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentDir === 'short' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
+                background: currentDir === 'short' ? 'rgba(244, 63, 94, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <TrendingDown size={16} color={currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentDir === 'short' ? 'var(--color-accent-rose)' : 'var(--color-text-main)' }}>
+                Short Only
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Order Execution Type Selector */}
+        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <Zap size={18} color="var(--color-accent-amber)" />
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+              Order Execution Mode
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
+            Execution mechanism tested in backtests and exported to MT5.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={() => updateRisk({ orderType: 'market' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentOrderType === 'market' ? '1px solid var(--color-accent-amber)' : '1px solid var(--color-border)',
+                background: currentOrderType === 'market' ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <Zap size={16} color={currentOrderType === 'market' ? 'var(--color-accent-amber)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentOrderType === 'market' ? 'var(--color-accent-amber)' : 'var(--color-text-main)' }}>
+                On Market
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateRisk({ orderType: 'stop' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentOrderType === 'stop' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                background: currentOrderType === 'stop' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <ArrowUpRight size={16} color={currentOrderType === 'stop' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentOrderType === 'stop' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
+                Buy/Sell Stop
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateRisk({ orderType: 'limit' })}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.75rem 0.5rem',
+                borderRadius: '6px',
+                border: currentOrderType === 'limit' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                background: currentOrderType === 'limit' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                cursor: 'pointer',
+                textAlign: 'center'
+              }}
+            >
+              <ArrowDownLeft size={16} color={currentOrderType === 'limit' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)'} />
+              <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentOrderType === 'limit' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>
+                Buy/Sell Limit
+              </span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. Consecutive Losses Protection (Kill Switch & Risk Reduction) */}
+      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <AlertTriangle size={18} color="var(--color-accent-rose)" />
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+            Protección de Pérdidas Consecutivas (Drawdown Kill-Switch)
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Protege tu cuenta activando una reducción dinámica de lotaje o pausando las operaciones del bot tras acumular $X$ pérdidas seguidas.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+          <button
+            type="button"
+            onClick={() => updateRisk({ consecutiveLossAction: 'none' })}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '6px',
+              border: currentLossAction === 'none' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+              background: currentLossAction === 'none' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+              color: currentLossAction === 'none' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <RotateCcw size={15} />
+            Sin Restricción (Normal)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateRisk({ consecutiveLossAction: 'reduce_risk' })}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '6px',
+              border: currentLossAction === 'reduce_risk' ? '1px solid var(--color-accent-amber)' : '1px solid var(--color-border)',
+              background: currentLossAction === 'reduce_risk' ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+              color: currentLossAction === 'reduce_risk' ? 'var(--color-accent-amber)' : 'var(--color-text-muted)',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <Percent size={15} />
+            Reducir Riesgo tras X Pérdidas
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateRisk({ consecutiveLossAction: 'stop_bot' })}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '6px',
+              border: currentLossAction === 'stop_bot' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
+              background: currentLossAction === 'stop_bot' ? 'rgba(244, 63, 94, 0.08)' : 'transparent',
+              color: currentLossAction === 'stop_bot' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <AlertTriangle size={15} />
+            Detener Bot tras X Pérdidas
+          </button>
+        </div>
+
+        {currentLossAction !== 'none' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px' }}>
+            <Input
+              id="risk-consec-threshold"
+              label="Umbral de Pérdidas Consecutivas (X)"
+              type="number"
+              step="1"
+              min="1"
+              max="10"
+              value={risk.consecutiveLossThreshold || 3}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ consecutiveLossThreshold: parseInt(e.target.value) || 3 })}
+              tooltip="Número de pérdidas consecutivas requeridas para activar la acción de protección."
+              tooltipTitle="Racha de Pérdidas"
+            />
+            {currentLossAction === 'reduce_risk' && (
+              <Input
+                id="risk-consec-reduction"
+                label="% Reducción de Riesgo / Lote"
+                type="number"
+                step="5"
+                min="10"
+                max="90"
+                value={risk.consecutiveLossReductionPct || 50}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ consecutiveLossReductionPct: parseInt(e.target.value) || 50 })}
+                tooltip="Porcentaje al que se reduce el lotaje o riesgo (ej: 50% reduce el lote a la mitad durante la racha)."
+                tooltipTitle="Factor de Reducción"
+              />
+            )}
+            {currentLossAction === 'stop_bot' && (
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-accent-rose)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertTriangle size={16} />
+                <span>El Asesor Experto se pausará automáticamente al alcanzar {risk.consecutiveLossThreshold || 3} pérdidas seguidas para evitar drawdowns profundos.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Automatic Reactivation Options (When stop_bot is active) */}
+        {currentLossAction === 'stop_bot' && (
+          <div style={{ marginTop: '1rem', borderTop: '1px solid var(--color-border)', paddingTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.375rem', color: 'var(--color-accent-cyan)', fontWeight: 600, fontSize: '0.875rem' }}>
+              <Sparkles size={16} />
+              <span>Alternativas de Reactivación Automática del Bot</span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
+              Define cuándo o cómo debe reactivarse la operativa tras detenerse por pérdidas consecutivas:
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', marginBottom: '1rem' }}>
+              {/* Option 1: Manual / Permanente */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'none' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: (risk.consecutiveLossReactivation || 'none') === 'none' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
+                  background: (risk.consecutiveLossReactivation || 'none') === 'none' ? 'rgba(244, 63, 94, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <AlertTriangle size={15} color={(risk.consecutiveLossReactivation || 'none') === 'none' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: (risk.consecutiveLossReactivation || 'none') === 'none' ? 'var(--color-accent-rose)' : 'var(--color-text-main)' }}>Manual / Permanente</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Requiere reinicio manual</div>
+                </div>
+              </button>
+
+              {/* Option 2: Velas de Enfriamiento (Cooldown) */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'cooldown_bars' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: risk.consecutiveLossReactivation === 'cooldown_bars' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  background: risk.consecutiveLossReactivation === 'cooldown_bars' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Clock size={15} color={risk.consecutiveLossReactivation === 'cooldown_bars' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: risk.consecutiveLossReactivation === 'cooldown_bars' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>Por Tiempo (Velas)</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Velas de enfriamiento (IA/Manual)</div>
+                </div>
+              </button>
+
+              {/* Option 3: Siguiente Sesión */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'next_session' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: risk.consecutiveLossReactivation === 'next_session' ? '1px solid var(--color-accent-amber)' : '1px solid var(--color-border)',
+                  background: risk.consecutiveLossReactivation === 'next_session' ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Timer size={15} color={risk.consecutiveLossReactivation === 'next_session' ? 'var(--color-accent-amber)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: risk.consecutiveLossReactivation === 'next_session' ? 'var(--color-accent-amber)' : 'var(--color-text-main)' }}>Siguiente Sesión</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Próxima sesión de trading</div>
+                </div>
+              </button>
+
+              {/* Option 4: Al Siguiente Día */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'next_day' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: risk.consecutiveLossReactivation === 'next_day' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                  background: risk.consecutiveLossReactivation === 'next_day' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <TrendingUp size={15} color={risk.consecutiveLossReactivation === 'next_day' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: risk.consecutiveLossReactivation === 'next_day' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>Al Siguiente Día</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>A las 00:00 del próximo día</div>
+                </div>
+              </button>
+
+              {/* Option 5: Cantidad de Días */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'days_count' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: risk.consecutiveLossReactivation === 'days_count' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  background: risk.consecutiveLossReactivation === 'days_count' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Layers size={15} color={risk.consecutiveLossReactivation === 'days_count' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: risk.consecutiveLossReactivation === 'days_count' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>Cantidad de Días (X)</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Pausar durante N días</div>
+                </div>
+              </button>
+
+              {/* Option 6: Siguiente Semana */}
+              <button
+                type="button"
+                onClick={() => updateRisk({ consecutiveLossReactivation: 'next_week' })}
+                style={{
+                  padding: '0.625rem 0.75rem',
+                  borderRadius: '6px',
+                  border: risk.consecutiveLossReactivation === 'next_week' ? '1px solid var(--color-accent-amber)' : '1px solid var(--color-border)',
+                  background: risk.consecutiveLossReactivation === 'next_week' ? 'rgba(245, 158, 11, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  textAlign: 'left'
+                }}
+              >
+                <Sliders size={15} color={risk.consecutiveLossReactivation === 'next_week' ? 'var(--color-accent-amber)' : 'var(--color-text-muted)'} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: risk.consecutiveLossReactivation === 'next_week' ? 'var(--color-accent-amber)' : 'var(--color-text-main)' }}>Siguiente Semana</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Pausar hasta el lunes</div>
+                </div>
+              </button>
+            </div>
+
+            {/* Cooldown Bars sub-config */}
+            {risk.consecutiveLossReactivation === 'cooldown_bars' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(0, 212, 255, 0.03)', padding: '0.875rem', borderRadius: '6px', border: '1px solid rgba(0, 212, 255, 0.12)', alignItems: 'center' }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-text-main)', fontWeight: 500 }}>
+                    <input
+                      type="checkbox"
+                      checked={risk.consecutiveLossAutoCooldown ?? true}
+                      onChange={(e) => updateRisk({ consecutiveLossAutoCooldown: e.target.checked })}
+                      style={{ accentColor: 'var(--color-accent-cyan)', width: '16px', height: '16px' }}
+                    />
+                    <span>✨ <b>Que la IA defina automáticamente</b> las velas de enfriamiento</span>
+                  </label>
+                  <p style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0 1.5rem', lineHeight: '1.3' }}>
+                    La IA analizará los patrones de rachas desfavorables para optimizar el período de cooldown.
+                  </p>
+                </div>
+
+                {!risk.consecutiveLossAutoCooldown && (
+                  <Input
+                    id="risk-consec-cooldown-bars"
+                    label="Velas fijas de enfriamiento"
+                    type="number"
+                    step="1"
+                    min="1"
+                    max="500"
+                    value={risk.consecutiveLossCooldownBars || 20}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ consecutiveLossCooldownBars: parseInt(e.target.value) || 20 })}
+                    tooltip="Cantidad exacta de velas que el bot esperará antes de reactivarse tras la racha de pérdidas."
+                    tooltipTitle="Velas de Enfriamiento"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Days Count sub-config */}
+            {risk.consecutiveLossReactivation === 'days_count' && (
+              <div style={{ background: 'rgba(0, 212, 255, 0.03)', padding: '0.875rem', borderRadius: '6px', border: '1px solid rgba(0, 212, 255, 0.12)', maxWidth: '320px' }}>
+                <Input
+                  id="risk-consec-cooldown-days"
+                  label="Cantidad de Días a Esperar"
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="30"
+                  value={risk.consecutiveLossCooldownDays || 1}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ consecutiveLossCooldownDays: parseInt(e.target.value) || 1 })}
+                  tooltip="Días que deben transcurrir tras la racha de pérdidas antes de permitir nuevas operaciones."
+                  tooltipTitle="Días de Espera"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Timing & Candle Count Configuration */}
+      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <Clock size={18} color="var(--color-accent-cyan)" />
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+            Timing & Candle Rules (Candle Count Exits & Cancellations)
+          </h3>
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Configure maximum holding time in candles and expiration timeout for pending orders before automatic cancellation.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+          {/* Rule 1: Pending Order Expiration */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.5rem' }}>
+              <Timer size={16} color="var(--color-accent-amber)" />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-main)' }}>
+                Pending Order Timeout (Velas para Omitir)
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
+              Si se coloca un Buy Stop / Sell Stop y pasan <b>X velas</b> sin activarse, la orden se cancela automáticamente.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <Input
+                id="risk-pending-timeout"
+                label="Max Velas Pendiente"
+                type="number"
+                step="1"
+                min="1"
+                max="50"
+                value={risk.pendingTimeoutBars || 3}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pendingTimeoutBars: parseInt(e.target.value) || 3 })}
+                tooltip="Cantidad de velas que la orden pendiente Buy Stop / Sell Stop permanecerá activa antes de ser descartada si el precio no la toca."
+                tooltipTitle="Cancelación de Orden Pendiente"
+              />
+              <Input
+                id="risk-pending-offset"
+                label="Offset Distancia (Pips)"
+                type="number"
+                step="0.5"
+                min="0.0"
+                max="50.0"
+                value={risk.pendingOffsetPips || 5.0}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pendingOffsetPips: parseFloat(e.target.value) || 5.0 })}
+                tooltip="Distancia en pips por encima del High (para Buy Stop) o por debajo del Low (para Sell Stop) al colocar la orden pendiente."
+                tooltipTitle="Offset de Entrada Pendiente"
+              />
+            </div>
+          </div>
+
+          {/* Rule 2: Max Holding Period / Candle Time Exit */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.5rem' }}>
+              <Clock size={16} color="var(--color-accent-emerald)" />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-main)' }}>
+                Time-Based Exit (Cierre tras X Velas)
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
+              Cierra obligatoriamente la posición abierta si han transcurrido <b>X velas</b> desde la entrada sin tocar SL/TP.
+            </p>
+            <Input
+              id="risk-max-holding-bars"
+              label="Cerrar tras X Velas (0 = Desactivado)"
+              type="number"
+              step="1"
+              min="0"
+              max="200"
+              value={risk.maxHoldingBars || 0}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ maxHoldingBars: parseInt(e.target.value) || 0 })}
+              tooltip="Límite máximo de duración del trade en velas. Si se coloca 0, la posición solo cerrará al tocar Stop Loss, Take Profit o señal contraria."
+              tooltipTitle="Cierre por Tiempo / Velas"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Position Sizing, SL, TP & Contract Spec Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
         
         {/* Section 1: Position Sizing Mode */}
@@ -325,7 +974,7 @@ export const StepRiskManagement: React.FC = () => {
 
           {risk.slType === 'none' && (
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will remain open until an opposite exit signal is generated.
+              Positions will remain open until an opposite exit signal or candle timeout is reached.
             </div>
           )}
         </div>
@@ -420,7 +1069,7 @@ export const StepRiskManagement: React.FC = () => {
 
           {risk.tpType === 'none' && (
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will close only upon reaching an opposite exit signal.
+              Positions will close upon reaching an opposite signal or max holding candles limit.
             </div>
           )}
         </div>

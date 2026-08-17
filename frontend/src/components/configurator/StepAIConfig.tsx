@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dna, Bot, Dice5 } from 'lucide-react';
+import { Dna, Bot, Dice5, Trophy, Clock } from 'lucide-react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
 import Select from '../common/Select';
@@ -11,7 +11,69 @@ const StepAIConfig: React.FC = () => {
   return (
     <div className={styles.stepContainer}>
       <h2 className={styles.stepTitle}>AI & Backtest Configuration</h2>
-      <p className={styles.stepSubtitle}>Configure the core evolutionary engines, neural RL, and Monte Carlo validation.</p>
+      <p className={styles.stepSubtitle}>Configure the core evolutionary engines, neural RL, candidate pool size, and Monte Carlo validation.</p>
+
+      {/* 0. Top Strategies Count Selector */}
+      <div className={styles.configSection} style={{ border: '1px solid rgba(0, 212, 255, 0.3)', background: 'rgba(0, 212, 255, 0.02)' }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Trophy size={20} className="text-cyan" />
+            <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Cantidad de Estrategias a Generar</h3>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--color-accent-amber)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <Clock size={13} />
+            Mayor cantidad = Más tiempo de análisis
+          </span>
+        </div>
+
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Elige cuántas estrategias finalistas quieres que el algoritmo genético optimice, valide con Monte Carlo y entregue al finalizar el pipeline.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          {[5, 10, 20, 30, 50].map((count) => {
+            const isSelected = (config.genetic.topStrategiesCount || 20) === count;
+            return (
+              <button
+                key={count}
+                type="button"
+                onClick={() => updateGenetic({ topStrategiesCount: count })}
+                style={{
+                  padding: '0.625rem 0.5rem',
+                  borderRadius: '6px',
+                  border: isSelected ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  background: isSelected ? 'rgba(0, 212, 255, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                  color: isSelected ? 'var(--color-accent-cyan)' : 'var(--color-text-main)',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  textAlign: 'center'
+                }}
+              >
+                <div>{count} Estrategias</div>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 400, color: 'var(--color-text-muted)', marginTop: '0.125rem' }}>
+                  {count === 5 ? '⚡ Ultrarrápido' : (count === 10 ? '✨ Recomendado' : (count === 20 ? '📊 Estándar' : (count === 30 ? '🔍 Extensivo' : '🔬 Búsqueda Profunda')))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          padding: '0.625rem 0.875rem',
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.2)',
+          borderRadius: '6px',
+          fontSize: '0.75rem',
+          color: 'var(--color-accent-amber)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          <span>💡 <b>Nota:</b> Entre más estrategias elijas generar (ej: 30 o 50), el motor evolutivo y las simulaciones de Monte Carlo procesarán más árboles lógicos, extendiendo la duración del análisis.</span>
+        </div>
+      </div>
 
       {/* 1. Genetic Programming */}
       <div className={styles.configSection}>

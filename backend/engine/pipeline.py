@@ -52,6 +52,7 @@ class StrategyPipeline:
             progress_callback(phase="genetic", progress=25, message="Evolving strategy population")
 
         gen_cfg = self.config.get("genetic", {})
+        top_target = int(gen_cfg.get("topStrategiesCount") or self.config.get("topStrategiesCount") or 20)
         evolver = StrategyEvolver(
             ohlcv_data=df,
             indicator_values=indicators,
@@ -59,7 +60,8 @@ class StrategyPipeline:
             n_generations=gen_cfg.get("generations", 25),
             crossover_prob=gen_cfg.get("crossoverProb", 0.7),
             mutation_prob=gen_cfg.get("mutationProb", 0.1),
-            risk_config=self.risk_config
+            risk_config=self.risk_config,
+            top_strategies_count=top_target
         )
 
         gp_strategies = evolver.evolve(
@@ -159,7 +161,7 @@ class StrategyPipeline:
         if progress_callback:
             progress_callback(phase="ranking", progress=90, message="Compiling strategy ranking")
 
-        ranked_strategies = self.ranker.rank(candidate_results)
+        ranked_strategies = self.ranker.rank(candidate_results)[:top_target]
 
         if progress_callback:
             progress_callback(phase="done", progress=100, message="Pipeline complete")

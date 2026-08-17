@@ -8,6 +8,7 @@ import EquityCurve from '../components/charts/EquityCurve';
 import MonteCarloFan from '../components/charts/MonteCarloFan';
 import MetricsCard from '../components/reports/MetricsCard';
 import JobConfigCard from '../components/reports/JobConfigCard';
+import { StrategyExplainerCard } from '../components/reports/StrategyExplainerCard';
 import Badge from '../components/common/Badge';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
@@ -175,6 +176,9 @@ const StrategyDetail: React.FC = () => {
       {job?.config && (
         <JobConfigCard config={job.config} defaultExpanded={false} />
       )}
+
+      {/* Human-Readable Strategy Explanation & Mechanics */}
+      <StrategyExplainerCard strategy={strategy} config={job?.config} />
 
       {/* Strategy Rule & Logic Formula */}
       {strategy.strategy_tree && (
@@ -427,11 +431,15 @@ const StrategyDetail: React.FC = () => {
                   1. Place the ONNX Model (If Deep RL)
                 </div>
                 <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem', margin: 0 }}>
-                  Click <b>Download Model (.onnx)</b> and move the file into your MT5 terminal directory:
+                  Click <b>Download Model (.onnx)</b> and save it in your MT5 files folder:
                   <br />
                   <code style={{ color: 'var(--color-accent-amber)', fontSize: '0.75rem', background: 'rgba(0,0,0,0.3)', padding: '0.125rem 0.25rem', borderRadius: '4px' }}>
                     MT5 Menu ➔ File ➔ Open Data Folder ➔ MQL5/Files/
                   </code>
+                  <br />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                    💡 <i>Para el Strategy Tester (Probador)</i>: También puedes colocarlo en <b>File ➔ Open Common Data Folder ➔ Files/</b> para acceso global en todos los agentes (Core 1, Core 2, etc.).
+                  </span>
                 </p>
               </div>
 
