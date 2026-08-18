@@ -93,6 +93,15 @@ class MT5TradeSimulator:
         self.contract_size = float(cfg.get("contractSize", 100000.0))
         self.point_size = float(cfg.get("pointSize", 0.0001))
         self.commission_per_lot = float(cfg.get("commissionPerLot", 7.0))
+        # True: charge commission on BOTH entry and exit (MT5 broker behavior,
+        # commission is applied per deal). False: single charge per round-trip.
+        self.commission_per_side = bool(cfg.get("commissionPerSide", cfg.get("commission_per_side", True)))
+        # Broker spread in pips. MT5 fills BUY orders at Ask and SELL orders at
+        # Bid; the Python simulator fills at the bar Open (mid price), which
+        # silently gives every trade the spread for free.
+        self.spread_pips = float(cfg.get("spreadPips", cfg.get("spread_pips", 1.0)))
+        # Overnight financing per lot per calendar day held (0 = no swap).
+        self.swap_per_lot_per_day = float(cfg.get("swapPerLotPerDay", cfg.get("swap_per_lot_per_day", 0.0)))
 
     def simulate(
         self,
@@ -123,7 +132,18 @@ class MT5TradeSimulator:
 
         if atr_array is None or len(atr_array) != n_bars:
             tr = np.maximum(highs - lows, np.abs(highs - np.roll(closes, 1)))
-            atr_array = pd.Series(tr).rolling(14).mean().bfill().values
+            atr_array = pd.Series(tr).rolling(14).mean().ffill().fillna(0.0).values
+
+        # Bar timestamps for swap (overnight) accounting. Falls back to None
+        # for non-datetime indexes (swap disabled).
+        try:
+            bar_dates = pd.to_datetime(df.index, errors="coerce")
+            if not isinstance(bar_dates, pd.DatetimeIndex) or bar_dates.isna().all():
+                bar_dates = None
+        except Exception:
+            bar_dates = None
+
+        half_spread = self.spread_pips * self.point_size / 2.0
 
         balance = self.initial_deposit
         equity_curve = [balance]
@@ -180,7 +200,11 @@ class MT5TradeSimulator:
             # =============================================================
             if deferred_exit and active_positions:
                 for pos in active_positions:
-                    exit_price = curr_open
+                    # Market close: longs sell at Bid, shorts buy at Ask (MT5 fills).
+                    if pos["dir"] == "buy":
+                        exit_price = curr_open - half_spread
+                    else:
+                        exit_price = curr_open + half_spread
                     exit_reason = "signal"
                     bars_held = i - pos["entry_idx"]
 
@@ -189,7 +213,7 @@ class MT5TradeSimulator:
                     else:
                         price_diff = pos["entry_price"] - exit_price
 
-                    trade_pnl = (price_diff * self.contract_size * pos["lots"]) - (pos["lots"] * self.commission_per_lot)
+                    trade_pnl = self._close_pnl(pos, price_diff, bars_held, i, bar_dates)
                     pnl_pct = price_diff / (pos["entry_price"] + 1e-8)
                     balance += trade_pnl
 
@@ -214,19 +238,27 @@ class MT5TradeSimulator:
             # =============================================================
             # Phase 2: Execute deferred MARKET ENTRY at current bar's Open
             # =============================================================
+            # MT5 fills BUY at Ask / SELL at Bid; SL/TP and ATR sizing are
+            # computed from the last CLOSED bar (bar i-1), not the forming bar.
+            prev_atr = max(1e-6, atr_array[i - 1]) if i > 0 else curr_atr
             while deferred_entries:
                 deferred_entry_dir = deferred_entries.pop(0)
                 if len(active_positions) < self.max_simultaneous_trades:
-                    pos_entry_price = curr_open
-                    pos_sl, pos_tp = self._calc_sltp(deferred_entry_dir, pos_entry_price, curr_atr)
-                    pos_lots = self._calc_lots(balance, pos_entry_price, pos_sl, live_consec_losses)
+                    if deferred_entry_dir == "buy":
+                        pos_entry_price = curr_open + half_spread
+                    else:
+                        pos_entry_price = curr_open - half_spread
+                    pos_sl, pos_tp = self._calc_sltp(deferred_entry_dir, pos_entry_price, prev_atr)
+                    unrealized = self._floating_pnl(active_positions, curr_close)
+                    pos_lots = self._calc_lots(balance + unrealized, pos_entry_price, pos_sl, live_consec_losses)
                     active_positions.append({
                         "dir": deferred_entry_dir,
                         "entry_price": pos_entry_price,
                         "entry_idx": i,
                         "sl": pos_sl,
                         "tp": pos_tp,
-                        "lots": pos_lots
+                        "lots": pos_lots,
+                        "entry_cost": (pos_lots * self.commission_per_lot) if self.commission_per_side else 0.0
                     })
 
             # =============================================================
@@ -271,7 +303,7 @@ class MT5TradeSimulator:
                     else:
                         price_diff = pos["entry_price"] - exit_price
 
-                    trade_pnl = (price_diff * self.contract_size * pos["lots"]) - (pos["lots"] * self.commission_per_lot)
+                    trade_pnl = self._close_pnl(pos, price_diff, bars_held, i, bar_dates)
                     pnl_pct = price_diff / (pos["entry_price"] + 1e-8)
                     balance += trade_pnl
 
@@ -333,7 +365,8 @@ class MT5TradeSimulator:
                             "entry_idx": i,
                             "sl": p_order.sl_price,
                             "tp": p_order.tp_price,
-                            "lots": p_order.lots
+                            "lots": p_order.lots,
+                            "entry_cost": (p_order.lots * self.commission_per_lot) if self.commission_per_side else 0.0
                         })
                     pending_orders.remove(p_order)
                 elif self.pending_timeout_bars > 0 and bars_waiting >= self.pending_timeout_bars:
@@ -352,11 +385,14 @@ class MT5TradeSimulator:
 
             total_incoming = len(active_positions) + len(pending_orders) + len(deferred_entries)
             if total_incoming < self.max_simultaneous_trades and not bot_stopped:
+                sizing_equity = balance + self._floating_pnl(active_positions, curr_close)
                 if can_enter_buy[i]:
                     if self.order_type == "stop":
                         target_p = highs[i] + offset_dist
+                        # MT5 places the pending order on the first tick of the
+                        # NEXT bar, using the last CLOSED bar (i) for SL/TP/ATR.
                         sl_p, tp_p = self._calc_sltp("buy", target_p, curr_atr)
-                        lots = self._calc_lots(balance, target_p, sl_p, live_consec_losses)
+                        lots = self._calc_lots(sizing_equity, target_p, sl_p, live_consec_losses)
                         pending_orders.append(PendingOrder(
                             direction="buy_stop", target_price=target_p, created_bar=i,
                             sl_price=sl_p, tp_price=tp_p, lots=lots
@@ -364,7 +400,7 @@ class MT5TradeSimulator:
                     elif self.order_type == "limit":
                         target_p = lows[i] - offset_dist
                         sl_p, tp_p = self._calc_sltp("buy", target_p, curr_atr)
-                        lots = self._calc_lots(balance, target_p, sl_p, live_consec_losses)
+                        lots = self._calc_lots(sizing_equity, target_p, sl_p, live_consec_losses)
                         pending_orders.append(PendingOrder(
                             direction="buy_limit", target_price=target_p, created_bar=i,
                             sl_price=sl_p, tp_price=tp_p, lots=lots
@@ -376,7 +412,7 @@ class MT5TradeSimulator:
                     if self.order_type == "stop":
                         target_p = lows[i] - offset_dist
                         sl_p, tp_p = self._calc_sltp("sell", target_p, curr_atr)
-                        lots = self._calc_lots(balance, target_p, sl_p, live_consec_losses)
+                        lots = self._calc_lots(sizing_equity, target_p, sl_p, live_consec_losses)
                         pending_orders.append(PendingOrder(
                             direction="sell_stop", target_price=target_p, created_bar=i,
                             sl_price=sl_p, tp_price=tp_p, lots=lots
@@ -384,7 +420,7 @@ class MT5TradeSimulator:
                     elif self.order_type == "limit":
                         target_p = highs[i] + offset_dist
                         sl_p, tp_p = self._calc_sltp("sell", target_p, curr_atr)
-                        lots = self._calc_lots(balance, target_p, sl_p, live_consec_losses)
+                        lots = self._calc_lots(sizing_equity, target_p, sl_p, live_consec_losses)
                         pending_orders.append(PendingOrder(
                             direction="sell_limit", target_price=target_p, created_bar=i,
                             sl_price=sl_p, tp_price=tp_p, lots=lots
@@ -393,15 +429,41 @@ class MT5TradeSimulator:
                         deferred_entries.append("sell")
 
             # Record floating equity
-            unrealized_pnl = 0.0
-            for pos in active_positions:
-                if pos["dir"] == "buy":
-                    unrealized_pnl += (curr_close - pos["entry_price"]) * self.contract_size * pos["lots"]
-                else:
-                    unrealized_pnl += (pos["entry_price"] - curr_close) * self.contract_size * pos["lots"]
-            
+            unrealized_pnl = self._floating_pnl(active_positions, curr_close)
             equity_curve.append(float(balance + unrealized_pnl))
         return self._compile_metrics(trades, equity_curve, df=df)
+
+    def _floating_pnl(self, positions: list[dict], ref_price: float) -> float:
+        """Unrealized PnL of open positions at ref_price (used for equity sizing)."""
+        total = 0.0
+        for pos in positions:
+            if pos["dir"] == "buy":
+                total += (ref_price - pos["entry_price"]) * self.contract_size * pos["lots"]
+            else:
+                total += (pos["entry_price"] - ref_price) * self.contract_size * pos["lots"]
+        return total
+
+    def _close_pnl(
+        self,
+        pos: dict,
+        price_diff: float,
+        bars_held: int,
+        exit_idx: int,
+        bar_dates: pd.DatetimeIndex | None
+    ) -> float:
+        """Round-trip PnL: gross price PnL minus entry commission (MT5 charges
+        per deal), exit commission and overnight swap financing."""
+        gross = price_diff * self.contract_size * pos["lots"]
+        # Exit commission always applies; entry commission only in per-side mode.
+        exit_commission = pos["lots"] * self.commission_per_lot
+        swap_cost = 0.0
+        if self.swap_per_lot_per_day != 0.0 and bar_dates is not None:
+            entry_date = bar_dates[pos["entry_idx"]]
+            exit_date = bar_dates[min(exit_idx, len(bar_dates) - 1)]
+            if pd.notna(entry_date) and pd.notna(exit_date):
+                days_held = (exit_date.normalize() - entry_date.normalize()).days
+                swap_cost = days_held * self.swap_per_lot_per_day * pos["lots"]
+        return gross - pos.get("entry_cost", 0.0) - exit_commission - swap_cost
 
     def _calc_sltp(self, direction: str, entry_price: float, atr_val: float) -> tuple[float, float]:
         sl_price = 0.0

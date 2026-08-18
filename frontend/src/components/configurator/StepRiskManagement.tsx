@@ -121,6 +121,10 @@ export const StepRiskManagement: React.FC = () => {
     tpAtrMult: 3.0,
     contractSize: 100000,
     pointSize: 0.0001,
+    spreadPips: 1.0,
+    commissionPerLot: 7.0,
+    commissionPerSide: true,
+    swapPerLotPerDay: 0.0,
   };
 
   const currentDir = risk.direction || 'both';
@@ -1218,6 +1222,69 @@ export const StepRiskManagement: React.FC = () => {
           <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <div>🔹 <strong>Contract Size:</strong> Copia directo el campo <code>Contract size</code> de la ficha MT5.</div>
             <div>🔹 <strong>Point / Pip Size:</strong> Se obtiene de los <code>Digits</code> de MT5: 2 dígitos = <code>0.01</code>, 3 dígitos = <code>0.001</code>, 5 dígitos = <code>0.00001</code>.</div>
+          </div>
+        </div>
+
+        {/* Section 5: MT5 Realistic Costs (Spread, Commission, Swap) */}
+        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <Scale size={18} color="var(--color-accent-rose)" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+              MT5 Costs (Realismo del Backtest)
+            </h3>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
+            El simulador debe castigar los costos que MT5 cobra en cada operación, o el backtest infla el PnL (spread gratis + comisión de un solo lado + sin swap). Configura los valores de <strong>tu broker</strong>.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <Input
+              id="risk-spread-pips"
+              label="Spread (Pips)"
+              type="number"
+              step="0.1"
+              min="0"
+              value={risk.spreadPips}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ spreadPips: parseFloat(e.target.value) || 0 })}
+              tooltip="Spread medio del símbolo en pips. El simulador compra al Ask (Open + spread/2) y vende al Bid (Open - spread/2), como MT5."
+              tooltipTitle="Spread Bid/Ask"
+            />
+            <Input
+              id="risk-commission-lot"
+              label="Comisión ($/lote)"
+              type="number"
+              step="0.5"
+              min="0"
+              value={risk.commissionPerLot}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ commissionPerLot: parseFloat(e.target.value) || 0 })}
+              tooltip="Comisión por lote (por lado, si 'Por lado' está activo). Ej: $7/lote = $0.70 por 0.1 lote en cada deal."
+              tooltipTitle="Comisión por Lote"
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-text-main)', fontWeight: 500, padding: '0.25rem 0' }}>
+              <input
+                type="checkbox"
+                checked={risk.commissionPerSide ?? true}
+                onChange={(e) => updateRisk({ commissionPerSide: e.target.checked })}
+                style={{ accentColor: 'var(--color-accent-rose)', width: '16px', height: '16px' }}
+              />
+              <span><b>Comisión por lado</b> (entrada + salida, como MT5)</span>
+            </label>
+            <Input
+              id="risk-swap-day"
+              label="Swap ($/lote/día)"
+              type="number"
+              step="0.5"
+              min="0"
+              value={risk.swapPerLotPerDay}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ swapPerLotPerDay: parseFloat(e.target.value) || 0 })}
+              tooltip="Financiamiento overnight por lote y por día que la posición permanece abierta (0 = sin swap). Revisa la ficha MT5 del símbolo."
+              tooltipTitle="Swap Overnight"
+            />
+          </div>
+
+          <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
+            💡 Con ~600-1000 operaciones, el spread + comisión doble + swap pueden costar miles de dólares. Configúralos <strong>antes</strong> de optimizar para que la IA descarte estrategias que solo viven del spread gratis.
           </div>
         </div>
 

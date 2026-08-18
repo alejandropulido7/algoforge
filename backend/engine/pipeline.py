@@ -25,7 +25,11 @@ class StrategyPipeline:
             "tpPips": 100.0,
             "tpAtrMult": 3.0,
             "contractSize": 100000.0,
-            "pointSize": 0.0001
+            "pointSize": 0.0001,
+            "spreadPips": 1.0,
+            "commissionPerLot": 7.0,
+            "commissionPerSide": True,
+            "swapPerLotPerDay": 0.0
         })
         self.calculator = IndicatorCalculator()
         self.backtester = VectorBTEngine(self.risk_config)
@@ -43,9 +47,30 @@ class StrategyPipeline:
 
         selected_inds = self.config.get("indicators", ["RSI", "MACD", "EMA", "SMA"])
         ind_params = self.config.get("indicatorParams", {})
-        ind_configs = [{"name": ind, "params": ind_params.get(ind, {})} for ind in selected_inds]
+        
+        ind_configs = []
+        import random
+        for ind in selected_inds:
+            # 1. Add the default indicator configuration
+            default_p = ind_params.get(ind, {})
+            ind_configs.append({"name": ind, "params": default_p, "var_name": ind})
+            
+            # 2. Add 3 random variations to enrich the genetic search space
+            for v in range(1, 4):
+                var_p = default_p.copy()
+                # Simple mutation strategy for standard periods (usually named window, period, length)
+                for p_key, p_val in var_p.items():
+                    if isinstance(p_val, int) and p_val > 0:
+                        var_p[p_key] = max(1, p_val + random.randint(-int(p_val*0.5), int(p_val*0.5)))
+                    elif isinstance(p_val, float):
+                        var_p[p_key] = p_val * random.uniform(0.5, 1.5)
+                
+                ind_configs.append({"name": ind, "params": var_p, "var_name": f"{ind}_v{v}"})
         
         indicators = self.calculator.calculate_all(df, ind_configs)
+        
+        # Save parameter map for the exporter
+        self.ind_param_map = {cfg["var_name"]: cfg["params"] for cfg in ind_configs}
 
         # 2. Genetic Evolution
         if progress_callback:
@@ -124,6 +149,7 @@ class StrategyPipeline:
                 "strategy_tree": strat["tree"],
                 "is_rl": strat.get("is_rl", False),
                 "job_id": self.job_id,
+                "indicator_config": self.ind_param_map,
                 "onnx_filename": strat.get("onnx_filename", f"AlgoForge_Job_{self.job_id}.onnx"),
                 "onnx_path": strat.get("onnx_path", ""),
                 "zip_path": strat.get("zip_path", ""),

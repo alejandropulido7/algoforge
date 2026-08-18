@@ -312,7 +312,11 @@ class IndicatorCalculator:
             val = cls.calculate_single(df_norm, name, params)
             if val is not None:
                 if isinstance(val, (pd.Series, pd.DataFrame)):
-                    arr = val.bfill().fillna(0).to_numpy()
+                    # NOTE: warmup values are NaN in the ta library. We fill with
+                    # 0 (like an MT5 buffer that has no value yet) instead of
+                    # bfill(), which used FUTURE data (lookahead bias) to fabricate
+                    # indicator values at the start of the dataset.
+                    arr = val.fillna(0).to_numpy()
                     results[name] = np.nan_to_num(arr)
                 elif isinstance(val, np.ndarray):
                     results[name] = np.nan_to_num(val)

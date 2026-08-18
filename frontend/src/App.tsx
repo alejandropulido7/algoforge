@@ -16,6 +16,7 @@ import JobProgress from './pages/JobProgress';
 import Results from './pages/Results';
 import StrategyDetail from './pages/StrategyDetail';
 import DataManager from './pages/DataManager';
+import Indicators from './pages/Indicators';
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ const App: React.FC = () => {
               <Route path="/jobs/:id/results" element={<Results />} />
               <Route path="/strategies/:id" element={<StrategyDetail />} />
               <Route path="/data" element={<DataManager />} />
+              <Route path="/indicators" element={<Indicators />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Route>

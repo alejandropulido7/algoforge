@@ -53,6 +53,9 @@ class RiskConfig(BaseModel):
     contractSize: float = 100000.0
     pointSize: float = 0.0001
     commissionPerLot: float = 7.0
+    spreadPips: float = 1.0
+    commissionPerSide: bool = True
+    swapPerLotPerDay: float = 0.0
 
 class GeneticConfig(BaseModel):
     model_config = ConfigDict(extra="allow")

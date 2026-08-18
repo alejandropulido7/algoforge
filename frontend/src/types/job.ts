@@ -34,6 +34,10 @@ export interface RiskConfig {
   tpAtrMult: number
   contractSize: number
   pointSize: number
+  spreadPips: number
+  commissionPerLot: number
+  commissionPerSide: boolean
+  swapPerLotPerDay: number
 }
 
 export interface JobConfig {

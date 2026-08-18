@@ -11,7 +11,7 @@ interface IndicatorItem {
   detail: string;
 }
 
-const ALL_INDICATORS: IndicatorItem[] = [
+export const ALL_INDICATORS: IndicatorItem[] = [
   // === Momentum (11) ===
   { id: 'RSI', name: 'RSI', category: 'momentum', desc: 'Relative Strength Index', detail: 'Measures momentum of recent price changes to evaluate overbought and oversold conditions.' },
   { id: 'Stochastic', name: 'Stochastic Oscillator', category: 'momentum', desc: 'Stochastic %K & %D', detail: 'Compares a specific closing price to a range of its prices over a set period.' },

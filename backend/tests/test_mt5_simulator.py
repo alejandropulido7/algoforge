@@ -148,3 +148,90 @@ def test_consecutive_loss_cooldown_reactivation():
     res = sim.simulate(df, buy_signals, sell_signals)
     # Trade 1 + Trade 2 + Trade 3 after cooldown = 3 trades
     assert res.total_trades == 3
+
+def test_mt5_simulator_spread_commission_swap_costs():
+    # Flat market at 100: buy at bar 2, opposite signal at bar 3 -> market signal exit.
+    # BUY fills at Ask (open + half spread), SELL exit fills at Bid (open - half spread),
+    # so the round-trip pays the full spread plus commissions on BOTH sides plus swap.
+    df = pd.DataFrame({
+        'Open': [100.0] * 10,
+        'High': [100.1] * 10,
+        'Low': [99.9] * 10,
+        'Close': [100.0] * 10,
+    }, index=pd.date_range("2026-01-01", periods=10, freq="1D"))
+
+    buy_signals = np.zeros(10, dtype=bool)
+    sell_signals = np.zeros(10, dtype=bool)
+    buy_signals[2] = True   # entry at bar 3 open
+    sell_signals[3] = True  # exit at bar 4 open
+
+    sim = MT5TradeSimulator({
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 10.0,           # 10 pips = 0.0010 full spread (0.0005 half)
+        "commissionPerLot": 5.0,      # per lot per side
+        "commissionPerSide": True,
+        "swapPerLotPerDay": 2.0,
+    })
+
+    res = sim.simulate(df, buy_signals, sell_signals)
+    assert res.total_trades == 1
+    t = res.trade_log[0]
+    # Entry at 100.0005, exit at 99.9995 -> price PnL = -0.001 * 100000 * 0.1 = -10.0
+    # Commission: 0.1 * 5 * 2 sides = -1.0. Swap: held 1 calendar day * 2.0 * 0.1 = -0.2
+    assert t["entry_price"] == 100.0005
+    assert t["exit_price"] == 99.9995
+    assert round(t["pnl"], 1) == -11.2
+
+    # Single-side commission mode (legacy behavior): only -5.0 * 0.1 = -0.5 commission
+    sim2 = MT5TradeSimulator({
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 10.0,
+        "commissionPerLot": 5.0,
+        "commissionPerSide": False,
+        "swapPerLotPerDay": 2.0,
+    })
+    res2 = sim2.simulate(df, buy_signals, sell_signals)
+    assert round(res2.trade_log[0]["pnl"], 1) == -10.7
+
+def test_mt5_simulator_atr_uses_last_closed_bar():
+    # Entry at bar 3 uses ATR of bar 2 (last CLOSED bar), not the forming bar.
+    # ATR[2] = 5.0 (huge) vs ATR[3] = 1.0 (calm). SL must be entry - 5.0 = 95.0
+    # (old code used the forming bar ATR and produced SL = 99.0).
+    atr_val = 5.0
+    df = pd.DataFrame({
+        'Open': [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0],
+        'High': [106.0, 100.0, 106.0, 102.0, 100.0, 100.0, 100.0, 100.0],
+        'Low':  [94.0,  100.0, 94.0,  94.0,  100.0, 100.0, 100.0, 100.0],
+        'Close':[100.0] * 8,
+    })
+    # Explicit ATR array: bar 2 (entry-1) has a huge ATR, bar 3 (entry bar) is calm.
+    atr = np.full(8, 1.0)
+    atr[2] = atr_val
+
+    buy_signals = np.zeros(8, dtype=bool)
+    sell_signals = np.zeros(8, dtype=bool)
+    buy_signals[2] = True  # deferred entry executes at bar 3 open
+
+    sim = MT5TradeSimulator({
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "atr",
+        "slAtrMult": 1.0,
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals, atr_array=atr)
+    assert res.total_trades == 1
+    t = res.trade_log[0]
+    # SL = entry - 1.0 * ATR[2] = 100 - 5.0 -> the bar-3 low (94) hits it.
+    assert t["exit_reason"] == "sl"
+    assert round(t["sl_price"], 4) == 95.0

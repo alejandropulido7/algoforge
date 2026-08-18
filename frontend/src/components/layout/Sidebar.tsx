@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Database, LogOut, Menu, Activity } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Database, LogOut, Menu, Activity, BarChart2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import styles from '../../styles/layout.module.css';
 
@@ -14,6 +14,7 @@ const Sidebar: React.FC = () => {
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/new', label: 'New Strategy', icon: PlusCircle },
     { to: '/data', label: 'Data Manager', icon: Database },
+    { to: '/indicators', label: 'Indicators', icon: BarChart2 },
   ];
 
   return (

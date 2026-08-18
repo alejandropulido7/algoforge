@@ -3,14 +3,28 @@ from engine.exporters.mt5_exporter import MT5Exporter
 from engine.exporters.pine_exporter import PineScriptExporter
 from engine.exporters.onnx_mt5_exporter import OnnxMT5Exporter
 from engine.exporters.python_live_exporter import PythonLiveExporter
+from engine.exporters.indicators_exporter import CustomIndicatorsExporter
 from algoforge.supabase.client import get_supabase_client
 
 # Local cache for exported models
 _LOCAL_STRATEGIES: dict[str, dict] = {}
 
+def export_all_indicators():
+    try:
+        exporter = CustomIndicatorsExporter()
+        return exporter.get_zip_buffer()
+    except Exception as e:
+        print(f"Error exporting indicators: {e}")
+        return None
+
 def register_local_strategy(strategy: dict):
     if "id" in strategy:
         _LOCAL_STRATEGIES[strategy["id"]] = strategy
+
+def purge_local_strategies_by_job(job_id: str):
+    keys_to_remove = [k for k, v in _LOCAL_STRATEGIES.items() if v.get("job_id") == job_id]
+    for k in keys_to_remove:
+        _LOCAL_STRATEGIES.pop(k, None)
 
 def get_strategy_by_id(strategy_id: str) -> dict:
     client = get_supabase_client()

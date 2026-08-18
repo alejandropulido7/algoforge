@@ -581,7 +581,6 @@ const StrategyDetail: React.FC = () => {
               <code>{code || '// Loading code...'}</code>
             </pre>
           )}
-          
           <div className="flex gap-2 absolute top-3 right-3">
             {isRLStrategy && (
               <Button 

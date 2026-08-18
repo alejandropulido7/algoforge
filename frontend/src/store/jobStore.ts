@@ -54,6 +54,10 @@ const defaultConfig: JobConfig = {
     tpAtrMult: 3.0,
     contractSize: 100000,
     pointSize: 0.0001,
+    spreadPips: 1.0,
+    commissionPerLot: 7.0,
+    commissionPerSide: true,
+    swapPerLotPerDay: 0.0,
   },
   genetic: {
     populationSize: 100,

@@ -192,3 +192,47 @@ def list_user_jobs(user_id: str) -> list[dict]:
     except Exception:
         pass
     return [j for j in _LOCAL_JOBS.values() if j.get("user_id") == user_id]
+
+def delete_user_job(job_id: str, user_id: str, user_token: str | None = None) -> dict:
+    """Delete a job and its associated strategies from Supabase and local cache."""
+    # 1. Try cancel/revoke running Celery task
+    try:
+        from workers.celery_app import celery_app
+        celery_app.control.revoke(job_id, terminate=True)
+    except Exception as e:
+        print(f"[Celery revoke notice]: {e}")
+
+    # 2. Purge from local memory
+    _LOCAL_JOBS.pop(job_id, None)
+    try:
+        from algoforge.services.export_service import purge_local_strategies_by_job
+        purge_local_strategies_by_job(job_id)
+    except Exception as e:
+        print(f"[Purge local strategies notice]: {e}")
+
+    # 3. Delete from Supabase (strategies first, then job)
+    deleted_from_db = False
+    
+    # Authenticated user client
+    if user_token and user_token != "dev_mock_token":
+        try:
+            u_client = get_user_client(user_token)
+            # Delete child strategies
+            u_client.table("strategies").delete().eq("job_id", job_id).execute()
+            # Delete job
+            res = u_client.table("jobs").delete().eq("id", job_id).eq("user_id", user_id).execute()
+            if res.data:
+                deleted_from_db = True
+        except Exception as e:
+            print(f"[Supabase user token delete notice]: {e}")
+
+    # Fallback to service role client
+    if not deleted_from_db:
+        try:
+            client = get_supabase_client()
+            client.table("strategies").delete().eq("job_id", job_id).execute()
+            client.table("jobs").delete().eq("id", job_id).execute()
+        except Exception as e:
+            print(f"[Supabase service delete fallback notice]: {e}")
+
+    return {"status": "deleted", "job_id": job_id}
