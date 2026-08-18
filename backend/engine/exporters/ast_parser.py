@@ -162,7 +162,7 @@ def node_to_pine(node: ExpressionNode) -> str:
             val = parse_constant_value(tok)
             return f"{val:.2f}"
         clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", tok).lower()
-        return f"{clean_name}Val"
+        return f"{clean_name}_val"
 
     args = [node_to_pine(a) for a in node.args]
 

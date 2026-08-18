@@ -5,14 +5,18 @@ import os
 import json
 import re
 import io
-from datetime import datetime, timedelta
+import urllib.request
+import lzma
+import struct
+import concurrent.futures
+from datetime import datetime, timedelta, date
 
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data_storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 INDEX_FILE = os.path.join(STORAGE_DIR, "datasets_index.json")
 
 class DataService:
-    """Service to fetch, upload, parse MT5 CSVs, and cache OHLCV market data."""
+    """Service to fetch (Yahoo / Dukascopy), upload, parse MT5 CSVs, and cache OHLCV market data."""
 
     TIMEFRAME_MAP = {
         "1m": "1m",
@@ -67,6 +71,142 @@ class DataService:
         with open(INDEX_FILE, "w") as f:
             json.dump(index, f, indent=2)
 
+    @staticmethod
+    def _get_dukascopy_point(symbol: str) -> float:
+        s = symbol.upper().replace("-", "").replace("/", "").replace("_", "")
+        if any(k in s for k in ["JPY", "XAU", "GOLD", "30", "100", "500", "40", "OIL", "BRENT"]):
+            return 1000.0
+        elif any(k in s for k in ["BTC", "ETH", "CRYPTO"]):
+            return 100.0
+        elif "XAG" in s:
+            return 10000.0
+        return 100000.0
+
+    @staticmethod
+    def _map_dukascopy_instrument(symbol: str) -> str:
+        s = symbol.upper().replace("/", "").replace("-", "").replace("=", "").replace("^", "").replace("_", "")
+        mapping = {
+            "EURUSD": "EUR/USD",
+            "GBPUSD": "GBP/USD",
+            "USDJPY": "USD/JPY",
+            "AUDUSD": "AUD/USD",
+            "USDCAD": "USD/CAD",
+            "USDCHF": "USD/CHF",
+            "NZDUSD": "NZD/USD",
+            "EURGBP": "EUR/GBP",
+            "EURJPY": "EUR/JPY",
+            "GBPJPY": "GBP/JPY",
+            "XAUUSD": "XAU/USD",
+            "GOLD": "XAU/USD",
+            "XAGUSD": "XAG/USD",
+            "SILVER": "XAG/USD",
+            "US30": "USA30.IDX/USD",
+            "DJ30": "USA30.IDX/USD",
+            "US500": "USA500.IDX/USD",
+            "SP500": "USA500.IDX/USD",
+            "NAS100": "USATECH.IDX/USD",
+            "USTECH": "USATECH.IDX/USD",
+            "GER40": "DEU.IDX/EUR",
+            "DAX40": "DEU.IDX/EUR",
+            "UK100": "GBR.IDX/GBP",
+            "USOIL": "LIGHT.CMD/USD",
+            "BRENT": "BRENT.CMD/USD",
+            "BTCUSD": "BTC/USD",
+            "ETHUSD": "ETH/USD"
+        }
+        if s in mapping:
+            return mapping[s]
+        if len(s) == 6:
+            return f"{s[:3]}/{s[3:]}"
+        return s
+
+    def _fetch_dukascopy(
+        self,
+        symbol: str = "EURUSD",
+        timeframe: str = "1h",
+        start: str | None = None,
+        end: str | None = None
+    ) -> pd.DataFrame:
+        """Download historical candles from Dukascopy API and format as OHLCV DataFrame."""
+        try:
+            import dukascopy_python as duka
+        except ImportError:
+            duka = None
+
+        instrument = self._map_dukascopy_instrument(symbol)
+        clean_sym = symbol.upper().replace("/", "").replace("-", "").replace("=", "").replace("^", "").replace("_", "")
+
+        start_str = start or (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+        end_str = end or datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d")
+            if end_dt <= start_dt:
+                end_dt = start_dt + timedelta(days=1)
+        except Exception:
+            start_dt = datetime.now() - timedelta(days=365)
+            end_dt = datetime.now()
+
+        tf_map = {
+            "1m": "1MIN",
+            "5m": "5MIN",
+            "15m": "15MIN",
+            "30m": "30MIN",
+            "1h": "1HOUR",
+            "4h": "4HOUR",
+            "1d": "1DAY",
+            "1w": "1WEEK"
+        }
+        interval_code = tf_map.get(timeframe.lower(), "1HOUR")
+
+        if duka is not None:
+            try:
+                df = duka.fetch(
+                    instrument=instrument,
+                    interval=interval_code,
+                    offer_side=duka.OFFER_SIDE_BID,
+                    start=start_dt,
+                    end=end_dt,
+                    limit=30000
+                )
+                if df is not None and len(df) > 0:
+                    df = df.reset_index()
+                    rename_cols = {}
+                    for c in df.columns:
+                        cl = c.lower()
+                        if "time" in cl or "date" in cl:
+                            rename_cols[c] = "Timestamp"
+                        elif cl == "open":
+                            rename_cols[c] = "Open"
+                        elif cl == "high":
+                            rename_cols[c] = "High"
+                        elif cl == "low":
+                            rename_cols[c] = "Low"
+                        elif cl == "close":
+                            rename_cols[c] = "Close"
+                        elif cl in ["volume", "vol"]:
+                            rename_cols[c] = "Volume"
+                    df = df.rename(columns=rename_cols)
+                    if "Timestamp" in df.columns:
+                        df["Timestamp"] = pd.to_datetime(df["Timestamp"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                    cols_to_keep = [c for c in ["Timestamp", "Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+                    df = df[cols_to_keep]
+
+                    self._save_to_index(
+                        symbol=clean_sym,
+                        timeframe=timeframe,
+                        df=df,
+                        source="dukascopy",
+                        name=f"{clean_sym} ({timeframe}) [Dukascopy]"
+                    )
+                    return df
+            except Exception as e:
+                print(f"[Dukascopy API fetch error]: {e}")
+
+        return pd.DataFrame()
+
     def fetch_ohlcv(
         self,
         symbol: str = "BTC-USD",
@@ -76,6 +216,11 @@ class DataService:
         source: str = "yfinance"
     ) -> pd.DataFrame:
         """Fetch OHLCV historical data as a pandas DataFrame."""
+        if source == "dukascopy":
+            df_duk = self._fetch_dukascopy(symbol=symbol, timeframe=timeframe, start=start, end=end)
+            if df_duk is not None and len(df_duk) > 5:
+                return df_duk
+
         if source == "csv":
             index = self._read_index()
             match = next((d for d in index if d["symbol"].upper() == symbol.upper() and d["timeframe"] == timeframe), None)
@@ -298,18 +443,59 @@ class DataService:
         return False
 
     @staticmethod
-    def list_symbols() -> list[dict]:
-        """Return predefined list of active multi-market symbols."""
-        return [
-            {"symbol": "BTC-USD", "name": "Bitcoin / USD", "type": "crypto"},
-            {"symbol": "ETH-USD", "name": "Ethereum / USD", "type": "crypto"},
-            {"symbol": "EURUSD=X", "name": "EUR / USD", "type": "forex"},
-            {"symbol": "GBPUSD=X", "name": "GBP / USD", "type": "forex"},
-            {"symbol": "^NDX", "name": "NASDAQ 100", "type": "index"},
-            {"symbol": "^GSPC", "name": "S&P 500", "type": "index"},
-            {"symbol": "AAPL", "name": "Apple Inc.", "type": "stock"},
-            {"symbol": "NVDA", "name": "NVIDIA Corporation", "type": "stock"},
-            {"symbol": "TSLA", "name": "Tesla Inc.", "type": "stock"}
+    def list_symbols(provider: str | None = None) -> list[dict]:
+        """Return predefined list of active multi-market symbols filtered by provider."""
+        all_symbols = [
+            # Dukascopy Institutional Catalogs
+            {"symbol": "EURUSD", "name": "EUR / USD (Euro / US Dollar)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "GBPUSD", "name": "GBP / USD (British Pound)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "USDJPY", "name": "USD / JPY (Japanese Yen)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "AUDUSD", "name": "AUD / USD (Australian Dollar)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "USDCAD", "name": "USD / CAD (Canadian Dollar)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "USDCHF", "name": "USD / CHF (Swiss Franc)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "NZDUSD", "name": "NZD / USD (New Zealand Dollar)", "type": "forex", "provider": "dukascopy", "category": "Forex Majors"},
+            {"symbol": "EURGBP", "name": "EUR / GBP (Euro / British Pound)", "type": "forex", "provider": "dukascopy", "category": "Forex Minors"},
+            {"symbol": "EURJPY", "name": "EUR / JPY (Euro / Japanese Yen)", "type": "forex", "provider": "dukascopy", "category": "Forex Minors"},
+            {"symbol": "GBPJPY", "name": "GBP / JPY (British Pound / Yen)", "type": "forex", "provider": "dukascopy", "category": "Forex Minors"},
+            {"symbol": "XAUUSD", "name": "XAU / USD (Gold Spot)", "type": "metal", "provider": "dukascopy", "category": "Metals & Commodities"},
+            {"symbol": "XAGUSD", "name": "XAG / USD (Silver Spot)", "type": "metal", "provider": "dukascopy", "category": "Metals & Commodities"},
+            {"symbol": "USOIL", "name": "WTI Light Crude Oil", "type": "commodity", "provider": "dukascopy", "category": "Metals & Commodities"},
+            {"symbol": "BRENT", "name": "Brent Crude Oil", "type": "commodity", "provider": "dukascopy", "category": "Metals & Commodities"},
+            {"symbol": "US30", "name": "US 30 (Wall Street 30 / Dow Jones)", "type": "index", "provider": "dukascopy", "category": "Indices"},
+            {"symbol": "US500", "name": "US 500 (S&P 500 Index)", "type": "index", "provider": "dukascopy", "category": "Indices"},
+            {"symbol": "NAS100", "name": "NAS 100 (US Tech 100 / Nasdaq)", "type": "index", "provider": "dukascopy", "category": "Indices"},
+            {"symbol": "GER40", "name": "GER 40 (Germany DAX 40)", "type": "index", "provider": "dukascopy", "category": "Indices"},
+            {"symbol": "UK100", "name": "UK 100 (FTSE 100 Index)", "type": "index", "provider": "dukascopy", "category": "Indices"},
+            {"symbol": "BTCUSD", "name": "BTC / USD (Bitcoin)", "type": "crypto", "provider": "dukascopy", "category": "Cryptocurrency"},
+            {"symbol": "ETHUSD", "name": "ETH / USD (Ethereum)", "type": "crypto", "provider": "dukascopy", "category": "Cryptocurrency"},
+
+            # Yahoo Finance Catalogs
+            {"symbol": "BTC-USD", "name": "Bitcoin / USD", "type": "crypto", "provider": "yfinance", "category": "Cryptocurrency"},
+            {"symbol": "ETH-USD", "name": "Ethereum / USD", "type": "crypto", "provider": "yfinance", "category": "Cryptocurrency"},
+            {"symbol": "SOL-USD", "name": "Solana / USD", "type": "crypto", "provider": "yfinance", "category": "Cryptocurrency"},
+            {"symbol": "EURUSD=X", "name": "EUR / USD", "type": "forex", "provider": "yfinance", "category": "Forex"},
+            {"symbol": "GBPUSD=X", "name": "GBP / USD", "type": "forex", "provider": "yfinance", "category": "Forex"},
+            {"symbol": "USDJPY=X", "name": "USD / JPY", "type": "forex", "provider": "yfinance", "category": "Forex"},
+            {"symbol": "AUDUSD=X", "name": "AUD / USD", "type": "forex", "provider": "yfinance", "category": "Forex"},
+            {"symbol": "USDCAD=X", "name": "USD / CAD", "type": "forex", "provider": "yfinance", "category": "Forex"},
+            {"symbol": "^NDX", "name": "NASDAQ 100", "type": "index", "provider": "yfinance", "category": "Indices"},
+            {"symbol": "^GSPC", "name": "S&P 500", "type": "index", "provider": "yfinance", "category": "Indices"},
+            {"symbol": "^DJI", "name": "Dow Jones Industrial Average", "type": "index", "provider": "yfinance", "category": "Indices"},
+            {"symbol": "^RUT", "name": "Russell 2000", "type": "index", "provider": "yfinance", "category": "Indices"},
+            {"symbol": "^VIX", "name": "CBOE Volatility Index", "type": "index", "provider": "yfinance", "category": "Indices"},
+            {"symbol": "GC=F", "name": "Gold Futures (COMEX)", "type": "commodity", "provider": "yfinance", "category": "Commodities"},
+            {"symbol": "SI=F", "name": "Silver Futures (COMEX)", "type": "commodity", "provider": "yfinance", "category": "Commodities"},
+            {"symbol": "CL=F", "name": "Crude Oil WTI Futures", "type": "commodity", "provider": "yfinance", "category": "Commodities"},
+            {"symbol": "AAPL", "name": "Apple Inc.", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "NVDA", "name": "NVIDIA Corporation", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "TSLA", "name": "Tesla Inc.", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "MSFT", "name": "Microsoft Corporation", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "AMZN", "name": "Amazon.com Inc.", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "META", "name": "Meta Platforms Inc.", "type": "stock", "provider": "yfinance", "category": "Stocks"},
+            {"symbol": "GOOGL", "name": "Alphabet Inc.", "type": "stock", "provider": "yfinance", "category": "Stocks"}
         ]
+        if provider:
+            return [s for s in all_symbols if s.get("provider") == provider]
+        return all_symbols
 
 data_service = DataService()

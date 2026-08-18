@@ -82,9 +82,18 @@ export const deleteDataset = async (datasetId: string): Promise<void> => {
   if (!response.ok) throw new Error('Failed to delete dataset');
 };
 
-export const getSymbols = async (): Promise<Array<{ symbol: string; name: string; type: string }>> => {
+export interface SymbolItem {
+  symbol: string;
+  name: string;
+  type: string;
+  provider?: string;
+  category?: string;
+}
+
+export const getSymbols = async (provider?: string): Promise<SymbolItem[]> => {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/data/symbols`, { headers });
+  const url = provider ? `${API_URL}/data/symbols?provider=${encodeURIComponent(provider)}` : `${API_URL}/data/symbols`;
+  const response = await fetch(url, { headers });
   if (!response.ok) return [];
   const res = await response.json();
   return res.symbols || [];

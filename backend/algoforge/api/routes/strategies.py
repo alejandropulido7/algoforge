@@ -102,9 +102,9 @@ def get_strategy(strategy_id: str, db = Depends(get_supabase)):
             strat["consecutive_losses_avg"] = round(float(np.mean(l_streaks)), 1) if l_streaks else 1.0
             strat["recovery_factor"] = round(net_p / max(1.0, float(strat.get("max_drawdown_pct", 10.0))), 2)
 
-        # Cap trade log payload to max 100 items for instant response
-        if "trade_log" in strat and isinstance(strat["trade_log"], list) and len(strat["trade_log"]) > 100:
-            strat["trade_log"] = strat["trade_log"][:100]
+        # Preserve complete trade log (up to 500 items for snappy UI response)
+        if "trade_log" in strat and isinstance(strat["trade_log"], list) and len(strat["trade_log"]) > 500:
+            strat["trade_log"] = strat["trade_log"][-500:]
             
         return strat
 

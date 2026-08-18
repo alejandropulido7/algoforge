@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, Zap, RefreshCw, Rocket, Trash2, Database, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, Zap, RefreshCw, Rocket, Trash2, Database, AlertCircle, CheckCircle2, Search, ChevronDown } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import Spinner from '../components/common/Spinner';
 import Badge from '../components/common/Badge';
-import { uploadCSV, fetchOHLCV, getDatasets, deleteDataset, getSymbols } from '../services/api';
+import { uploadCSV, fetchOHLCV, getDatasets, deleteDataset, getSymbols, type SymbolItem } from '../services/api';
 import { useJobStore } from '../store/jobStore';
 import type { DataSource } from '../types/data';
 import styles from '../styles/pages.module.css';
@@ -15,19 +15,65 @@ const DataManager: React.FC = () => {
   const navigate = useNavigate();
   const { updateDataSource } = useJobStore();
 
-  const [symbol, setSymbol] = useState('BTC-USD');
-  const [timeframe, setTimeframe] = useState('1d');
+  const [provider, setProvider] = useState<'yfinance' | 'dukascopy'>('dukascopy');
+  const [symbol, setSymbol] = useState('XAUUSD');
+  const [timeframe, setTimeframe] = useState('1h');
   const [startDate, setStartDate] = useState('2023-01-01');
   const [endDate, setEndDate] = useState('2024-01-01');
   
   const [datasets, setDatasets] = useState<DataSource[]>([]);
-  const [symbols, setSymbols] = useState<Array<{ symbol: string; name: string }>>([]);
+  const [symbols, setSymbols] = useState<SymbolItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const providerSymbols = useMemo(() => {
+    return symbols.filter(s => s.provider === provider);
+  }, [symbols, provider]);
+
+  const filteredSymbols = useMemo(() => {
+    if (!searchQuery.trim()) return providerSymbols;
+    const q = searchQuery.toLowerCase();
+    return providerSymbols.filter(s => 
+      s.symbol.toLowerCase().includes(q) || 
+      s.name.toLowerCase().includes(q) || 
+      (s.category && s.category.toLowerCase().includes(q))
+    );
+  }, [providerSymbols, searchQuery]);
+
+  const groupedSymbols = useMemo(() => {
+    const groups: Record<string, SymbolItem[]> = {};
+    filteredSymbols.forEach(s => {
+      const cat = s.category || 'General';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(s);
+    });
+    return groups;
+  }, [filteredSymbols]);
+
+  const handleSelectSymbol = (sym: string) => {
+    setSymbol(sym.toUpperCase());
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -104,17 +150,18 @@ const DataManager: React.FC = () => {
         timeframe,
         startDate,
         endDate,
-        source: 'yfinance'
+        source: provider
       });
+      const providerName = provider === 'dukascopy' ? 'Dukascopy (Institutional Feed)' : 'Yahoo Finance';
       setNotification({
         type: 'success',
-        message: `Fetched ${res.row_count} bars for ${symbol.toUpperCase()} (${timeframe}) from Yahoo Finance.`
+        message: `Descargadas ${res.row_count} barras para ${symbol.toUpperCase()} (${timeframe}) desde ${providerName}.`
       });
       await loadData();
     } catch (err: any) {
       setNotification({
         type: 'error',
-        message: `Fetch failed: ${err.message || 'Provider request failed'}`
+        message: `Fetch fallido: ${err.message || 'Error consultando al proveedor'}`
       });
     } finally {
       setFetching(false);
@@ -153,12 +200,13 @@ const DataManager: React.FC = () => {
   const handleUseInStrategy = (dataset: DataSource) => {
     const sDate = normalizeDate(dataset.startDate || dataset.start_date);
     const eDate = normalizeDate(dataset.endDate || dataset.end_date);
+    const sourceVal = dataset.source === 'dukascopy' ? 'dukascopy' : dataset.source === 'yfinance' ? 'yfinance' : 'csv';
     updateDataSource({
       symbol: dataset.symbol,
       timeframe: dataset.timeframe,
       startDate: sDate || '2023-01-01',
       endDate: eDate || '2024-01-01',
-      source: dataset.source === 'yfinance' ? 'yfinance' : 'csv'
+      source: sourceVal
     });
     navigate('/jobs/new');
   };
@@ -230,25 +278,194 @@ const DataManager: React.FC = () => {
 
         {/* Fetch from Live Provider */}
         <div className={styles.fetchCard}>
-          <div className="flex items-center gap-2 mb-2">
-            <Database size={20} className="text-cyan" />
-            <h3 className={styles.cardTitle} style={{ margin: 0 }}>Fetch Live Provider Data</h3>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Database size={20} className="text-cyan" />
+              <h3 className={styles.cardTitle} style={{ margin: 0 }}>Fetch Live / Institutional Data</h3>
+            </div>
+            {/* Provider Switcher */}
+            <div className="flex gap-1 bg-surface-dark p-1 rounded border border-border">
+              <button
+                type="button"
+                className={`text-xs px-3 py-1 rounded transition font-medium ${provider === 'dukascopy' ? 'bg-cyan text-black font-bold' : 'text-secondary hover:text-primary'}`}
+                onClick={() => {
+                  setProvider('dukascopy');
+                  setSymbol('XAUUSD');
+                  setTimeframe('1h');
+                }}
+              >
+                🏛️ Dukascopy (Tick-Quality)
+              </button>
+              <button
+                type="button"
+                className={`text-xs px-3 py-1 rounded transition font-medium ${provider === 'yfinance' ? 'bg-cyan text-black font-bold' : 'text-secondary hover:text-primary'}`}
+                onClick={() => {
+                  setProvider('yfinance');
+                  setSymbol('BTC-USD');
+                  setTimeframe('1d');
+                }}
+              >
+                🌐 Yahoo Finance
+              </button>
+            </div>
           </div>
+
           <div className={styles.formGrid}>
-            <div>
-              <Input 
-                label="Symbol" 
-                placeholder="e.g. BTC-USD, EURUSD=X, AAPL" 
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-              />
-              {symbols.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {symbols.slice(0, 5).map(s => (
+            <div ref={dropdownRef} style={{ position: 'relative' }}>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.35rem' }}>
+                Asset / Symbol ({provider === 'dukascopy' ? 'Dukascopy' : 'Yahoo Finance'}) *
+              </label>
+              <div 
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: 'var(--color-bg-tertiary)',
+                  border: isDropdownOpen ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  borderRadius: '6px',
+                  padding: '0.45rem 0.75rem',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s ease'
+                }}
+                onClick={() => setIsDropdownOpen(prev => !prev)}
+              >
+                <Search size={15} className="text-secondary" style={{ marginRight: '0.5rem', flexShrink: 0 }} />
+                <input 
+                  type="text"
+                  value={isDropdownOpen ? searchQuery : symbol}
+                  placeholder={isDropdownOpen ? 'Buscar por símbolo o nombre (ej. Gold, Nasdaq, EURUSD)...' : 'Selecciona o escribe un símbolo...'}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isDropdownOpen) setIsDropdownOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      handleSelectSymbol(searchQuery.trim());
+                    }
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--color-text-primary)',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    width: '100%'
+                  }}
+                />
+                <ChevronDown size={16} className="text-secondary" style={{ marginLeft: '0.5rem', flexShrink: 0 }} />
+              </div>
+
+              {/* Custom Dropdown Menu with Categories */}
+              {isDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '4px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  background: 'var(--color-bg-secondary)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                  zIndex: 100,
+                  padding: '0.5rem'
+                }}>
+                  {searchQuery.trim() && (
+                    <div 
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        background: 'rgba(0, 212, 255, 0.08)',
+                        borderRadius: '6px',
+                        marginBottom: '0.5rem',
+                        cursor: 'pointer',
+                        fontSize: '0.8125rem',
+                        color: 'var(--color-accent-cyan)',
+                        fontWeight: 600
+                      }}
+                      onClick={() => handleSelectSymbol(searchQuery.trim())}
+                    >
+                      Usar ticker personalizado: "{searchQuery.toUpperCase()}"
+                    </div>
+                  )}
+
+                  {Object.keys(groupedSymbols).length === 0 ? (
+                    <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>
+                      No se encontraron activos predefinidos. Presiona Enter para usar "{searchQuery.toUpperCase()}".
+                    </div>
+                  ) : (
+                    Object.entries(groupedSymbols).map(([category, syms]) => (
+                      <div key={category} style={{ marginBottom: '0.5rem' }}>
+                        <div style={{
+                          fontSize: '0.6875rem',
+                          textTransform: 'uppercase',
+                          fontWeight: 700,
+                          letterSpacing: '0.05em',
+                          color: 'var(--color-text-tertiary)',
+                          padding: '0.25rem 0.5rem'
+                        }}>
+                          {category}
+                        </div>
+                        {syms.map(s => {
+                          const isSelected = symbol.toUpperCase() === s.symbol.toUpperCase();
+                          return (
+                            <div
+                              key={s.symbol}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                background: isSelected ? 'rgba(0, 212, 255, 0.12)' : 'transparent',
+                                color: isSelected ? 'var(--color-accent-cyan)' : 'var(--color-text-primary)',
+                                fontSize: '0.8125rem',
+                                transition: 'background 0.1s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'var(--color-bg-tertiary)';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = 'transparent';
+                              }}
+                              onClick={() => handleSelectSymbol(s.symbol)}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <strong style={{ fontFamily: 'monospace', color: isSelected ? 'var(--color-accent-cyan)' : 'var(--color-text-primary)' }}>
+                                  {s.symbol}
+                                </strong>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                  {s.name}
+                                </span>
+                              </div>
+                              <span style={{
+                                fontSize: '0.6875rem',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: 'var(--color-bg-primary)',
+                                border: '1px solid var(--color-border)',
+                                color: 'var(--color-text-tertiary)'
+                              }}>
+                                {s.type.toUpperCase()}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {providerSymbols.length > 0 && (
+                <div className={styles.chipList} style={{ marginTop: '0.5rem' }}>
+                  {providerSymbols.slice(0, 6).map(s => (
                     <button
                       key={s.symbol}
                       type="button"
-                      className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black rounded transition"
+                      className={`${styles.symbolChip} ${symbol.toUpperCase() === s.symbol.toUpperCase() ? styles.symbolChipActive : ''}`}
                       onClick={() => setSymbol(s.symbol)}
                     >
                       {s.symbol}
@@ -262,14 +479,27 @@ const DataManager: React.FC = () => {
               label="Timeframe"
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              options={[
-                {label: '1 Minute (1m)', value: '1m'},
-                {label: '5 Minutes (5m)', value: '5m'},
-                {label: '15 Minutes (15m)', value: '15m'},
-                {label: '1 Hour (1h)', value: '1h'},
-                {label: '1 Day (1d)', value: '1d'},
-                {label: '1 Week (1w)', value: '1w'}
-              ]}
+              options={
+                provider === 'dukascopy'
+                  ? [
+                      { label: '1 Minute (1m) — M1 Institucional', value: '1m' },
+                      { label: '5 Minutes (5m)', value: '5m' },
+                      { label: '15 Minutes (15m)', value: '15m' },
+                      { label: '30 Minutes (30m)', value: '30m' },
+                      { label: '1 Hour (1h)', value: '1h' },
+                      { label: '4 Hours (4h)', value: '4h' },
+                      { label: '1 Day (1d)', value: '1d' }
+                    ]
+                  : [
+                      { label: '1 Minute (1m) [Máx 7 días]', value: '1m' },
+                      { label: '5 Minutes (5m) [Máx 60 días]', value: '5m' },
+                      { label: '15 Minutes (15m) [Máx 60 días]', value: '15m' },
+                      { label: '30 Minutes (30m) [Máx 60 días]', value: '30m' },
+                      { label: '1 Hour (1h) [Máx 730 días]', value: '1h' },
+                      { label: '1 Day (1d) [Historial Completo]', value: '1d' },
+                      { label: '1 Week (1w) [Historial Completo]', value: '1w' }
+                    ]
+              }
             />
 
             <Input 

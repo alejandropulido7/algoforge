@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileCode, Copy, Check, Download, Activity, Cpu, HelpCircle, ChevronDown, ChevronUp, FolderCheck } from 'lucide-react';
+import { FileCode, Copy, Check, Download, Activity, Cpu, HelpCircle, ChevronDown, ChevronUp, FolderCheck, History, GitBranch } from 'lucide-react';
 import { useStrategy } from '../hooks/useStrategies';
 import { useJob } from '../hooks/useJobs';
 import { exportStrategy, downloadOnnxModel } from '../services/api';
@@ -12,7 +12,6 @@ import { StrategyExplainerCard } from '../components/reports/StrategyExplainerCa
 import Badge from '../components/common/Badge';
 import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
-import { GitBranch } from 'lucide-react';
 import styles from '../styles/pages.module.css';
 
 const StrategyDetail: React.FC = () => {
@@ -25,6 +24,7 @@ const StrategyDetail: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [downloadingOnnx, setDownloadingOnnx] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [tradeFilter, setTradeFilter] = useState<'latest50' | 'first50' | 'all'>('latest50');
 
   const stratId = strategy?.id;
 
@@ -64,6 +64,10 @@ const StrategyDetail: React.FC = () => {
 
   // Robust calculation of MT5 Strategy Tester metrics if missing from database record
   const tradeLog = strategy.trade_log || [];
+  const displayedTrades = tradeFilter === 'latest50'
+    ? [...tradeLog].slice(-50).reverse()
+    : (tradeFilter === 'first50' ? tradeLog.slice(0, 50) : tradeLog);
+
   const pnls = tradeLog.map(t => Number(t.pnl || 0));
   
   const grossProfit = (strategy.gross_profit && strategy.gross_profit > 0) 
@@ -314,33 +318,92 @@ const StrategyDetail: React.FC = () => {
       {/* Trade Log Table */}
       {strategy.trade_log && strategy.trade_log.length > 0 && (
         <div className={styles.tableCard} style={{ marginBottom: '1.5rem' }}>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className={styles.tableTitle} style={{ margin: 0 }}>Trade Execution History (Sample)</h3>
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Showing first {Math.min(strategy.trade_log.length, 50)} trades</span>
+          <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <History size={18} className="text-cyan" />
+              <h3 className={styles.tableTitle} style={{ margin: 0 }}>Trade Execution History</h3>
+              <Badge variant="info">{strategy.trade_log.length} trades totales</Badge>
+            </div>
+            
+            <div className="flex items-center gap-1.5 p-1 rounded-md" style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}>
+              <button
+                type="button"
+                onClick={() => setTradeFilter('latest50')}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: tradeFilter === 'latest50' ? 'rgba(0, 212, 255, 0.15)' : 'transparent',
+                  color: tradeFilter === 'latest50' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
+                  border: tradeFilter === 'latest50' ? '1px solid var(--color-accent-cyan)' : '1px solid transparent'
+                }}
+              >
+                Últimos 50 Trades (Recientes)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTradeFilter('first50')}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: tradeFilter === 'first50' ? 'rgba(0, 212, 255, 0.15)' : 'transparent',
+                  color: tradeFilter === 'first50' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
+                  border: tradeFilter === 'first50' ? '1px solid var(--color-accent-cyan)' : '1px solid transparent'
+                }}
+              >
+                Primeros 50 Trades
+              </button>
+              {strategy.trade_log.length > 50 && (
+                <button
+                  type="button"
+                  onClick={() => setTradeFilter('all')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: tradeFilter === 'all' ? 'rgba(0, 212, 255, 0.15)' : 'transparent',
+                    color: tradeFilter === 'all' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
+                    border: tradeFilter === 'all' ? '1px solid var(--color-accent-cyan)' : '1px solid transparent'
+                  }}
+                >
+                  Ver Todos ({strategy.trade_log.length})
+                </button>
+              )}
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', textAlign: 'left' }}>
-                  <th style={{ padding: '0.5rem' }}>#</th>
-                  <th style={{ padding: '0.5rem' }}>Type</th>
-                  <th style={{ padding: '0.5rem' }}>Entry Date</th>
-                  <th style={{ padding: '0.5rem' }}>Exit Date</th>
-                  <th style={{ padding: '0.5rem' }}>Entry Price</th>
-                  <th style={{ padding: '0.5rem' }}>Exit Price</th>
-                  <th style={{ padding: '0.5rem' }}>Size</th>
-                  <th style={{ padding: '0.5rem' }}>Profit / Loss</th>
-                  <th style={{ padding: '0.5rem' }}>Exit Reason</th>
-                  <th style={{ padding: '0.5rem' }}>Bars</th>
+                  <th style={{ padding: '0.5rem' }}># Trade</th>
+                  <th style={{ padding: '0.5rem' }}>Tipo</th>
+                  <th style={{ padding: '0.5rem' }}>Fecha Entrada</th>
+                  <th style={{ padding: '0.5rem' }}>Fecha Salida</th>
+                  <th style={{ padding: '0.5rem' }}>Precio Entrada</th>
+                  <th style={{ padding: '0.5rem' }}>Stop Loss (SL)</th>
+                  <th style={{ padding: '0.5rem' }}>Take Profit (TP)</th>
+                  <th style={{ padding: '0.5rem' }}>Precio Salida</th>
+                  <th style={{ padding: '0.5rem' }}>Lotaje</th>
+                  <th style={{ padding: '0.5rem' }}>Beneficio / Pérdida</th>
+                  <th style={{ padding: '0.5rem' }}>Motivo de Salida</th>
+                  <th style={{ padding: '0.5rem' }}>Velas</th>
                 </tr>
               </thead>
               <tbody>
-                {strategy.trade_log.slice(0, 50).map((t, idx) => {
+                {displayedTrades.map((t, idx) => {
                   const isProfit = (t.pnl || 0) >= 0;
+                  const tradeNum = t.trade_idx || (tradeFilter === 'latest50' ? (strategy.trade_log.length - idx) : idx + 1);
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <td style={{ padding: '0.5rem', color: 'var(--color-text-muted)' }}>{t.trade_idx || idx + 1}</td>
+                      <td style={{ padding: '0.5rem', color: 'var(--color-accent-cyan)', fontWeight: 600 }}>#{tradeNum}</td>
                       <td style={{ padding: '0.5rem' }}>
                         <span style={{
                           padding: '0.125rem 0.375rem',
@@ -360,13 +423,27 @@ const StrategyDetail: React.FC = () => {
                         {t.exit_time ? t.exit_time.slice(0, 16) : '-'}
                       </td>
                       <td style={{ padding: '0.5rem' }}>{t.entry_price}</td>
+                      <td style={{ padding: '0.5rem', color: t.sl_price ? 'var(--color-accent-rose)' : 'var(--color-text-muted)' }}>
+                        {t.sl_price ? t.sl_price : '-'}
+                      </td>
+                      <td style={{ padding: '0.5rem', color: t.tp_price ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)' }}>
+                        {t.tp_price ? t.tp_price : '-'}
+                      </td>
                       <td style={{ padding: '0.5rem' }}>{t.exit_price}</td>
                       <td style={{ padding: '0.5rem' }}>{t.size || 0.1}</td>
                       <td style={{ padding: '0.5rem', fontWeight: 600, color: isProfit ? 'var(--color-accent-emerald)' : 'var(--color-accent-rose)' }}>
                         {isProfit ? `+${formatCurrency(t.pnl)}` : formatCurrency(t.pnl)}
                       </td>
                       <td style={{ padding: '0.5rem' }}>
-                        <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                        <span style={{
+                          fontSize: '0.6875rem',
+                          textTransform: 'uppercase',
+                          padding: '0.125rem 0.375rem',
+                          borderRadius: '4px',
+                          background: t.exit_reason === 'tp' ? 'rgba(16, 185, 129, 0.15)' : (t.exit_reason === 'sl' ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)'),
+                          color: t.exit_reason === 'tp' ? 'var(--color-accent-emerald)' : (t.exit_reason === 'sl' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)'),
+                          fontWeight: 600
+                        }}>
                           {t.exit_reason || 'SIGNAL'}
                         </span>
                       </td>
@@ -486,7 +563,7 @@ const StrategyDetail: React.FC = () => {
             className={`${styles.codeTab} ${activeTab === 'pine' ? styles.codeTabActive : ''}`} 
             onClick={() => setActiveTab('pine')}
           >
-            TradingView Pine Script v5
+            TradingView Pine Script v6
           </button>
           <button 
             className={`${styles.codeTab} ${activeTab === 'python' ? styles.codeTabActive : ''}`} 

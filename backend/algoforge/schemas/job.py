@@ -22,6 +22,8 @@ class RiskConfig(BaseModel):
     strategy_approach: Optional[str] = None
     orderType: str = "market" # "market" | "stop" | "limit" | "any"
     order_type: Optional[str] = None
+    maxSimultaneousTrades: int = 1
+    max_simultaneous_trades: Optional[int] = None
     pendingTimeoutBars: int = 3
     pending_timeout_bars: Optional[int] = None
     pendingOffsetPips: float = 5.0

@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Globe, FileSpreadsheet, Calendar, Sparkles, CheckCircle2 } from 'lucide-react';
+import { FileSpreadsheet, Calendar, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
 import Select from '../common/Select';
-import { getDatasets, getSymbols } from '../../services/api';
+import { getDatasets } from '../../services/api';
 import type { DataSource } from '../../types/data';
 import styles from '../../styles/pages.module.css';
 
@@ -32,17 +32,17 @@ const StepDataSource: React.FC = () => {
   const ds = config.dataSource;
 
   const [datasets, setDatasets] = useState<DataSource[]>([]);
-  const [popularSymbols, setPopularSymbols] = useState<Array<{ symbol: string; name: string }>>([]);
 
   useEffect(() => {
+    // Force CSV source
+    updateDataSource({ source: 'csv' });
+    
     const loadData = async () => {
       try {
-        const [dsets, syms] = await Promise.all([getDatasets(), getSymbols()]);
+        const dsets = await getDatasets();
         setDatasets(dsets);
-        setPopularSymbols(syms);
 
-        // If in CSV mode and datasets exist, ensure valid date range is populated
-        if (ds.source === 'csv' && dsets.length > 0) {
+        if (dsets.length > 0) {
           const match = dsets.find(
             d => d.symbol.toUpperCase() === ds.symbol.toUpperCase() && d.timeframe === ds.timeframe
           ) || dsets[0];
@@ -65,7 +65,8 @@ const StepDataSource: React.FC = () => {
     loadData();
   }, []);
 
-  // Find currently active dataset for CSV mode
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+
   const activeDataset = useMemo(() => {
     if (datasets.length === 0) return undefined;
     return datasets.find(
@@ -79,52 +80,24 @@ const StepDataSource: React.FC = () => {
   const activeEnd = activeDataset ? normalizeDate(activeDataset.endDate || activeDataset.end_date) : '';
   const activeBars = activeDataset ? (activeDataset.rowCount || activeDataset.row_count || 0) : 0;
 
-  const handleSwitchSource = (newSource: 'yfinance' | 'csv') => {
-    if (newSource === 'csv') {
-      if (datasets.length > 0) {
-        const target = activeDataset || datasets[0];
-        const sDate = normalizeDate(target.startDate || target.start_date);
-        const eDate = normalizeDate(target.endDate || target.end_date);
-        updateDataSource({
-          source: 'csv',
-          symbol: target.symbol,
-          timeframe: target.timeframe,
-          startDate: sDate || '2021-01-01',
-          endDate: eDate || '2026-01-01'
-        });
-      } else {
-        updateDataSource({ source: 'csv' });
-      }
-    } else {
-      const today = new Date().toISOString().slice(0, 10);
-      const oneYearAgo = new Date(Date.now() - 365 * 86400 * 1000).toISOString().slice(0, 10);
-      updateDataSource({
-        source: 'yfinance',
-        symbol: ds.symbol === 'CUSTOM' ? 'BTC-USD' : ds.symbol,
-        startDate: ds.startDate || oneYearAgo,
-        endDate: ds.endDate || today
-      });
-    }
-  };
-
   const handleSelectDataset = (id: string) => {
     const selected = datasets.find(d => d.id === id);
     if (selected) {
       const sDate = normalizeDate(selected.startDate || selected.start_date);
       const eDate = normalizeDate(selected.endDate || selected.end_date);
+      const sourceVal = selected.source === 'dukascopy' ? 'dukascopy' : selected.source === 'yfinance' ? 'yfinance' : 'csv';
       updateDataSource({
         symbol: selected.symbol,
         timeframe: selected.timeframe,
         startDate: sDate || ds.startDate,
         endDate: eDate || ds.endDate,
-        source: 'csv'
+        source: sourceVal
       });
     }
   };
 
-  // Quick Preset Handlers
   const applyPreset = (preset: 'full' | '1y' | '2y' | '6m' | '2025_present') => {
-    if (ds.source === 'csv' && activeDataset) {
+    if (activeDataset) {
       const sDate = normalizeDate(activeDataset.startDate || activeDataset.start_date);
       const eDate = normalizeDate(activeDataset.endDate || activeDataset.end_date);
       if (!eDate) return;
@@ -146,30 +119,22 @@ const StepDataSource: React.FC = () => {
         const s2025 = '2025-01-01';
         updateDataSource({ startDate: s2025 < sDate ? sDate : s2025, endDate: eDate });
       }
-    } else {
-      const today = new Date().toISOString().slice(0, 10);
-      const now = Date.now();
-      if (preset === 'full' || preset === '2y') {
-        const s2y = new Date(now - 730 * 86400 * 1000).toISOString().slice(0, 10);
-        updateDataSource({ startDate: s2y, endDate: today });
-      } else if (preset === '1y') {
-        const s1y = new Date(now - 365 * 86400 * 1000).toISOString().slice(0, 10);
-        updateDataSource({ startDate: s1y, endDate: today });
-      } else if (preset === '6m') {
-        const s6m = new Date(now - 180 * 86400 * 1000).toISOString().slice(0, 10);
-        updateDataSource({ startDate: s6m, endDate: today });
-      } else if (preset === '2025_present') {
-        updateDataSource({ startDate: '2025-01-01', endDate: today });
-      }
     }
   };
 
-  const csvOptions = datasets.map(d => {
+  const filteredDatasets = useMemo(() => {
+    if (selectedSource === 'all') return datasets;
+    if (selectedSource === 'csv') return datasets.filter(d => d.source !== 'dukascopy' && d.source !== 'yfinance');
+    return datasets.filter(d => d.source === selectedSource);
+  }, [datasets, selectedSource]);
+
+  const csvOptions = filteredDatasets.map(d => {
     const sDate = normalizeDate(d.startDate || d.start_date);
     const eDate = normalizeDate(d.endDate || d.end_date);
     const dateRangeStr = sDate && eDate ? ` [${sDate} → ${eDate}]` : '';
+    const srcLabel = d.source === 'dukascopy' ? 'Dukascopy' : d.source === 'yfinance' ? 'Yahoo' : 'MT5/CSV';
     return {
-      label: `${d.symbol} (${d.timeframe}) - ${d.rowCount || d.row_count || 0} bars${dateRangeStr}`,
+      label: `[${srcLabel}] ${d.symbol} (${d.timeframe}) - ${d.rowCount || d.row_count || 0} bars${dateRangeStr}`,
       value: d.id
     };
   });
@@ -180,101 +145,60 @@ const StepDataSource: React.FC = () => {
     <div className={styles.stepContainer}>
       <h2 className={styles.stepTitle}>Data Source & Historical Range</h2>
       <p className={styles.stepSubtitle}>
-        Select market provider, symbol, bar timeframe, and historical date boundaries for strategy discovery.
+        Selecciona la fuente de datos y luego el dataset descargado en Data Manager que deseas usar para el descubrimiento de estrategias.
       </p>
 
       <div className={styles.tabsContainer}>
-        <div 
-          className={`${styles.tab} ${ds.source === 'yfinance' ? styles.tabActive : ''} flex items-center justify-center gap-2`}
-          onClick={() => handleSwitchSource('yfinance')}
-        >
-          <Globe size={16} />
-          <span>Yahoo Finance (Live Provider)</span>
-        </div>
-        <div 
-          className={`${styles.tab} ${ds.source === 'csv' ? styles.tabActive : ''} flex items-center justify-center gap-2`}
-          onClick={() => handleSwitchSource('csv')}
-        >
+        <div className={`${styles.tab} ${styles.tabActive} flex items-center justify-center gap-2`}>
           <FileSpreadsheet size={16} />
-          <span>Custom Data / MT5 CSV ({datasets.length})</span>
+          <span>📁 Datasets Caché ({datasets.length})</span>
         </div>
       </div>
 
       <div className={styles.formGrid}>
-        {ds.source === 'yfinance' ? (
-          <div>
-            <Input 
-              label="Symbol *" 
-              value={ds.symbol}
-              onChange={(e) => updateDataSource({ symbol: e.target.value.toUpperCase() })}
-              placeholder="e.g. BTC-USD, AAPL, EURUSD=X, ^NDX"
-              required
-              error={!ds.symbol ? 'Symbol is required' : undefined}
-              tooltipTitle="Trading Asset / Symbol"
-              tooltip="Ticker del activo financiero a descargar desde Yahoo Finance (ej. BTC-USD para cripto, EURUSD=X para forex, AAPL para acciones, ^NDX para NASDAQ)."
-            />
-            {popularSymbols.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {popularSymbols.slice(0, 5).map(s => (
-                  <button
-                    key={s.symbol}
-                    type="button"
-                    className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black rounded transition"
-                    onClick={() => updateDataSource({ symbol: s.symbol })}
-                  >
-                    {s.symbol}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            <Select 
-              label="Select Uploaded Dataset (MT5 / CSV) *"
-              options={
-                csvOptions.length > 0
-                  ? [{ label: '-- Choose a dataset --', value: '' }, ...csvOptions]
-                  : [{ label: 'No datasets uploaded yet. Upload in Data Manager.', value: '' }]
-              }
-              value={datasets.find(d => d.symbol === ds.symbol && d.timeframe === ds.timeframe)?.id || activeDataset?.id || ''}
-              onChange={(e) => handleSelectDataset(e.target.value)}
-              tooltipTitle="Uploaded MT5 Dataset"
-              tooltip="Selecciona uno de los archivos CSV históricos importados desde MetaTrader 5."
-            />
-            {csvOptions.length === 0 && (
-              <p className="text-xs text-amber mt-1">
-                Tip: Go to <strong>Data Manager</strong> to upload your MT5 historical CSVs.
-              </p>
-            )}
-          </div>
-        )}
+        <div>
+          <Select
+            label="Data Source Provider"
+            options={[
+              { label: 'All Sources', value: 'all' },
+              { label: '🏛️ Dukascopy (Institutional)', value: 'dukascopy' },
+              { label: '🌐 Yahoo Finance', value: 'yfinance' },
+              { label: '📁 Custom Data / MT5 CSV', value: 'csv' }
+            ]}
+            value={selectedSource}
+            onChange={(e) => setSelectedSource(e.target.value)}
+            tooltipTitle="Filtro de Fuente"
+            tooltip="Filtra los datasets descargados por su proveedor de origen."
+          />
+        </div>
 
-        <Select 
-          label="Timeframe *"
-          value={ds.timeframe}
-          onChange={(e) => updateDataSource({ timeframe: e.target.value })}
-          options={[
-            {label: '1 Minute (M1)', value: '1m'},
-            {label: '5 Minutes (M5)', value: '5m'},
-            {label: '15 Minutes (M15)', value: '15m'},
-            {label: '30 Minutes (M30)', value: '30m'},
-            {label: '1 Hour (H1)', value: '1h'},
-            {label: '4 Hours (H4)', value: '4h'},
-            {label: '1 Day (D1)', value: '1d'},
-            {label: '1 Week (W1)', value: '1w'}
-          ]}
-          tooltipTitle="Bar Timeframe (Temporalidad)"
-          tooltip="Duración de cada vela japonesa para el cálculo de indicadores y ejecución de señales."
-        />
+        <div>
+          <Select 
+            label="Select Downloaded Dataset *"
+            options={
+              csvOptions.length > 0
+                ? [{ label: '-- Choose a dataset --', value: '' }, ...csvOptions]
+                : [{ label: `No datasets for this source. Download in Data Manager.`, value: '' }]
+            }
+            value={datasets.find(d => d.symbol === ds.symbol && d.timeframe === ds.timeframe)?.id || activeDataset?.id || ''}
+            onChange={(e) => handleSelectDataset(e.target.value)}
+            tooltipTitle="Dataset Caché"
+            tooltip="Selecciona uno de los activos históricos que ya descargaste en el Data Manager."
+          />
+          {csvOptions.length === 0 && (
+            <p className="text-xs text-amber mt-1">
+              Tip: Ve a <strong>Data Manager</strong> para descargar activos o subir CSVs.
+            </p>
+          )}
+        </div>
 
         <div>
           <Input 
             type="date"
             label="Start Date * (Obligatorio)"
             value={ds.startDate}
-            min={ds.source === 'csv' && activeStart ? activeStart : undefined}
-            max={ds.source === 'csv' && activeEnd ? activeEnd : undefined}
+            min={activeStart || undefined}
+            max={activeEnd || undefined}
             onChange={(e) => updateDataSource({ startDate: e.target.value })}
             required
             error={!ds.startDate ? 'Start Date is mandatory' : undefined}
@@ -288,8 +212,8 @@ const StepDataSource: React.FC = () => {
             type="date"
             label="End Date * (Obligatorio)"
             value={ds.endDate}
-            min={ds.source === 'csv' && activeStart ? activeStart : undefined}
-            max={ds.source === 'csv' && activeEnd ? activeEnd : undefined}
+            min={activeStart || undefined}
+            max={activeEnd || undefined}
             onChange={(e) => updateDataSource({ endDate: e.target.value })}
             required
             error={
@@ -305,121 +229,53 @@ const StepDataSource: React.FC = () => {
         </div>
       </div>
 
-      {/* Dataset Range Banner & Quick Presets */}
-      {ds.source === 'csv' && activeDataset && (
-        <div style={{
-          marginTop: '1rem',
-          padding: '0.85rem 1rem',
-          borderRadius: '8px',
-          background: 'rgba(0, 212, 255, 0.05)',
-          border: '1px solid rgba(0, 212, 255, 0.25)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.6rem'
-        }}>
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-sm text-primary">
+      {activeDataset && (
+        <div className={styles.rangeBanner}>
+          <div className={styles.rangeBannerHeader}>
+            <div className={styles.rangeBannerText}>
               <Calendar size={16} className="text-cyan" />
               <span>
-                Rango disponible en CSV: <strong className="text-cyan">{activeStart || 'N/A'}</strong> al <strong className="text-cyan">{activeEnd || 'N/A'}</strong> ({activeBars.toLocaleString()} velas).
+                Rango disponible en dataset: <strong className="text-cyan">{activeStart || 'N/A'}</strong> al <strong className="text-cyan">{activeEnd || 'N/A'}</strong> ({activeBars.toLocaleString()} velas).
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald">
+            <div className={styles.rangeBannerBadge}>
               <CheckCircle2 size={14} />
-              <span>Fechas sincronizadas con el dataset</span>
+              <span>Sincronizado</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-border-light">
-            <span className="text-xs text-secondary flex items-center gap-1">
+          <div className={styles.presetBar}>
+            <span className={styles.presetBarTitle}>
               <Sparkles size={13} className="text-cyan" />
               Presets de Rango:
             </span>
             <button
               type="button"
-              className="text-xs px-2.5 py-1 bg-cyan/15 hover:bg-cyan hover:text-black text-cyan border border-cyan/30 rounded transition font-medium"
+              className={styles.presetBtnPrimary}
               onClick={() => applyPreset('full')}
             >
-              Rango Completo ({activeStart} → {activeEnd})
+              Rango Completo
             </button>
             <button
               type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-surface-lighter text-primary border border-border rounded transition"
+              className={styles.presetBtn}
               onClick={() => applyPreset('1y')}
             >
               Último 1 Año
             </button>
             <button
               type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-surface-lighter text-primary border border-border rounded transition"
+              className={styles.presetBtn}
               onClick={() => applyPreset('2y')}
             >
               Últimos 2 Años
             </button>
             <button
               type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-surface-lighter text-primary border border-border rounded transition"
+              className={styles.presetBtn}
               onClick={() => applyPreset('6m')}
             >
               Últimos 6 Meses
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-surface-lighter text-primary border border-border rounded transition"
-              onClick={() => applyPreset('2025_present')}
-            >
-              Desde 2025
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Yahoo Finance Quick Presets */}
-      {ds.source === 'yfinance' && (
-        <div style={{
-          marginTop: '1rem',
-          padding: '0.75rem 1rem',
-          borderRadius: '8px',
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '0.5rem'
-        }}>
-          <span className="text-xs text-secondary flex items-center gap-1">
-            <Sparkles size={13} className="text-cyan" />
-            Presets de Período (Yahoo Finance):
-          </span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black text-primary rounded transition"
-              onClick={() => applyPreset('1y')}
-            >
-              1 Año
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black text-primary rounded transition"
-              onClick={() => applyPreset('2y')}
-            >
-              2 Años
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black text-primary rounded transition"
-              onClick={() => applyPreset('6m')}
-            >
-              6 Meses
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2 py-1 bg-surface-light hover:bg-cyan hover:text-black text-primary rounded transition"
-              onClick={() => applyPreset('2025_present')}
-            >
-              Desde 2025
             </button>
           </div>
         </div>
@@ -436,3 +292,4 @@ const StepDataSource: React.FC = () => {
 };
 
 export default StepDataSource;
+

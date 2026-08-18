@@ -35,6 +35,7 @@ const defaultConfig: JobConfig = {
     direction: 'both',
     strategyApproach: 'all',
     orderType: 'market',
+    maxSimultaneousTrades: 1,
     pendingTimeoutBars: 3,
     pendingOffsetPips: 5.0,
     maxHoldingBars: 0,

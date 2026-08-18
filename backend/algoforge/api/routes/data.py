@@ -46,6 +46,6 @@ def delete_dataset(dataset_id: str, user: dict = Depends(get_current_user)):
     return {"success": success, "dataset_id": dataset_id}
 
 @router.get("/symbols")
-def get_symbols(user: dict = Depends(get_current_user)):
-    """Return default supported market symbols."""
-    return {"symbols": data_service.list_symbols()}
+def get_symbols(provider: str | None = None, user: dict = Depends(get_current_user)):
+    """Return default supported market symbols with optional provider filter."""
+    return {"symbols": data_service.list_symbols(provider=provider)}

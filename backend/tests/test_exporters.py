@@ -130,3 +130,35 @@ def test_onnx_mt5_exporter_exact_inputs():
     assert "InpLotSize              = 0.35;" in code
     assert "InpStopLossPips         = 150.0;" in code
     assert "InpTakeProfitPips       = 300.0;" in code
+
+def test_mt5_exporter_williams_and_vwap():
+    strategy = {
+        "id": "d5906d9f-d1e9-4f01-bd4f-747ce8cdafce",
+        "rank": 1,
+        "symbol": "NAS100",
+        "timeframe": "15m",
+        "strategy_tree": "lt(add(VWAP, Williams_pctR), lt(VWAP, EMA))",
+        "indicator_config": [
+            {"name": "VWAP", "params": {"period": 14}},
+            {"name": "Williams_pctR", "params": {"period": 14}},
+            {"name": "EMA", "params": {"period": 20}}
+        ],
+        "risk_config": {
+            "direction": "long",
+            "orderType": "market",
+            "slType": "atr",
+            "tpType": "atr"
+        }
+    }
+
+    exporter = MT5Exporter()
+    code = exporter.export(strategy)
+
+    # Verify handles match exactly
+    assert "int handle_williams_pctr;" in code
+    assert "handle_williams_pctr = iWPR(_Symbol, _Period, InpWPRPeriod);" in code
+    assert "IndicatorRelease(handle_williams_pctr);" in code
+    assert "double williams_pctr_val[];" in code
+    assert "CopyBuffer(handle_williams_pctr, 0, 0, 4, williams_pctr_val)" in code
+    assert "williams_pctr_val[1]" in code
+    assert "handle_williams_r" not in code

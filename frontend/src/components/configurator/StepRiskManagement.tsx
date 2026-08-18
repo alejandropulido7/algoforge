@@ -380,6 +380,39 @@ export const StepRiskManagement: React.FC = () => {
 
       </div>
 
+      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: '0 0 0.5rem 0' }}>
+          Simultaneous Trades
+        </h3>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+          Establece cuántas operaciones simultáneas puede abrir el bot al mismo tiempo si la condición de entrada se sigue cumpliendo. (1 = Operación única por estrategia)
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+              Max Operaciones Simultáneas
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={risk.maxSimultaneousTrades || 1}
+              onChange={(e) => updateRisk({ maxSimultaneousTrades: Number(e.target.value) })}
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-main)',
+                fontSize: '0.875rem'
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* 3. Consecutive Losses Protection (Kill Switch & Risk Reduction) */}
       <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
@@ -1076,36 +1109,115 @@ export const StepRiskManagement: React.FC = () => {
 
         {/* Section 4: Contract & Point Parameters */}
         <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Sliders size={18} color="var(--color-accent-amber)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Symbol & Contract Spec
-            </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sliders size={18} color="var(--color-accent-amber)" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+                Symbol & Contract Spec
+              </h3>
+            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-accent-cyan)', background: 'rgba(0, 212, 255, 0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(0, 212, 255, 0.2)' }}>
+              MT5 Spec Sync
+            </span>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
+            Copia los valores desde la ventana <strong>Especificación de MT5</strong> para calcular el valor exacto del pip y lotaje:
+          </p>
+
+          {/* Quick Presets for Common Asset Classes */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '1rem' }}>
+            <button
+              type="button"
+              onClick={() => updateRisk({ contractSize: 1, pointSize: 0.01 })}
+              style={{
+                fontSize: '0.6875rem',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                background: risk.contractSize === 1 && risk.pointSize === 0.01 ? 'rgba(0, 212, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: risk.contractSize === 1 && risk.pointSize === 0.01 ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                color: risk.contractSize === 1 && risk.pointSize === 0.01 ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              🏛️ Índices (NAS100 / US30): 1 & 0.01
+            </button>
+            <button
+              type="button"
+              onClick={() => updateRisk({ contractSize: 100, pointSize: 0.01 })}
+              style={{
+                fontSize: '0.6875rem',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                background: risk.contractSize === 100 && risk.pointSize === 0.01 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: risk.contractSize === 100 && risk.pointSize === 0.01 ? '1px solid var(--color-accent-amber)' : '1px solid var(--color-border)',
+                color: risk.contractSize === 100 && risk.pointSize === 0.01 ? 'var(--color-accent-amber)' : 'var(--color-text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              🪙 Oro (XAUUSD): 100 & 0.01
+            </button>
+            <button
+              type="button"
+              onClick={() => updateRisk({ contractSize: 100000, pointSize: 0.00001 })}
+              style={{
+                fontSize: '0.6875rem',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                background: risk.contractSize === 100000 && risk.pointSize === 0.00001 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: risk.contractSize === 100000 && risk.pointSize === 0.00001 ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                color: risk.contractSize === 100000 && risk.pointSize === 0.00001 ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              💱 Forex 5D (EURUSD): 100k & 0.00001
+            </button>
+            <button
+              type="button"
+              onClick={() => updateRisk({ contractSize: 1, pointSize: 0.01 })}
+              style={{
+                fontSize: '0.6875rem',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              ₿ Crypto (BTCUSD): 1 & 0.01
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <Input
               id="risk-contract-size"
-              label="Contract Size"
+              label="Contract Size (MT5 'Contract size')"
               type="number"
-              step="1000"
+              step="1"
               min="1"
               value={risk.contractSize}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ contractSize: parseFloat(e.target.value) || 100000 })}
-              tooltip="Units per standard lot (e.g. 100,000 for Forex EURUSD, 1 for Crypto/Indices)."
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ contractSize: parseFloat(e.target.value) || 1 })}
+              tooltip="Valor 'Contract size' en MT5 (1 para NAS100/US30/Crypto, 100 para Oro, 100,000 para Forex)."
               tooltipTitle="Contract Size"
             />
             <Input
               id="risk-point-size"
-              label="Point / Pip Size"
+              label="Point / Pip Size (10^-Digits)"
               type="number"
               step="0.00001"
               min="0.00001"
               value={risk.pointSize}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pointSize: parseFloat(e.target.value) || 0.0001 })}
-              tooltip="Minimum price increment (0.0001 for 4-digit Forex, 0.00001 for 5-digit Forex, 0.01 for Crypto/JPY/Gold)."
-              tooltipTitle="Point Size"
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pointSize: parseFloat(e.target.value) || 0.01 })}
+              tooltip="Fórmula: Si MT5 Digits = 2 -> 0.01 (NAS100/XAUUSD). Si Digits = 5 -> 0.00001 (Forex). Si Digits = 3 -> 0.001 (JPY)."
+              tooltipTitle="Point / Pip Size"
             />
+          </div>
+
+          {/* MT5 Direct Mapping Info Box */}
+          <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <div>🔹 <strong>Contract Size:</strong> Copia directo el campo <code>Contract size</code> de la ficha MT5.</div>
+            <div>🔹 <strong>Point / Pip Size:</strong> Se obtiene de los <code>Digits</code> de MT5: 2 dígitos = <code>0.01</code>, 3 dígitos = <code>0.001</code>, 5 dígitos = <code>0.00001</code>.</div>
           </div>
         </div>
 

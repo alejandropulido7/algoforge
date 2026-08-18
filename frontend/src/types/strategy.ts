@@ -41,6 +41,8 @@ export interface TradeEntry {
   direction: 'buy' | 'sell' | 'long' | 'short'
   entry_price: number
   exit_price: number
+  sl_price?: number | null
+  tp_price?: number | null
   size?: number
   pnl: number
   pnl_pct: number

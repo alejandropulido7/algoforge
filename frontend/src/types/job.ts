@@ -15,6 +15,7 @@ export interface RiskConfig {
   direction: TradeDirection
   strategyApproach: StrategyApproach
   orderType: OrderType
+  maxSimultaneousTrades: number
   pendingTimeoutBars: number
   pendingOffsetPips: number
   maxHoldingBars: number
@@ -37,7 +38,7 @@ export interface RiskConfig {
 
 export interface JobConfig {
   dataSource: {
-    source: 'yfinance' | 'csv'
+    source: 'yfinance' | 'dukascopy' | 'csv' | 'mt5_csv' | string
     symbol: string
     timeframe: string
     startDate: string

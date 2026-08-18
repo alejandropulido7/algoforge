@@ -12,96 +12,96 @@ class MT5Exporter:
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpRSIPeriod = {period};  // RSI Period",
-                "handle": "handle_rsi = iRSI(_Symbol, _Period, InpRSIPeriod, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iRSI(_Symbol, _Period, InpRSIPeriod, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double rsi_val[];\n"
-                    "   ArraySetAsSeries(rsi_val, true);\n"
-                    "   if(CopyBuffer(handle_rsi, 0, 0, 4, rsi_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "ema":
             period = int(p.get("window", p.get("period", p.get("length", 20))))
             return {
                 "param": f"input int      InpEMAPeriod = {period};  // EMA Period",
-                "handle": "handle_ema = iMA(_Symbol, _Period, InpEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double ema_val[];\n"
-                    "   ArraySetAsSeries(ema_val, true);\n"
-                    "   if(CopyBuffer(handle_ema, 0, 0, 4, ema_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "sma":
             period = int(p.get("window", p.get("period", p.get("length", 20))))
             return {
                 "param": f"input int      InpSMAPeriod = {period};  // SMA Period",
-                "handle": "handle_sma = iMA(_Symbol, _Period, InpSMAPeriod, 0, MODE_SMA, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpSMAPeriod, 0, MODE_SMA, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double sma_val[];\n"
-                    "   ArraySetAsSeries(sma_val, true);\n"
-                    "   if(CopyBuffer(handle_sma, 0, 0, 4, sma_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "wma":
             period = int(p.get("window", p.get("period", p.get("length", 20))))
             return {
                 "param": f"input int      InpWMAPeriod = {period};  // WMA Period",
-                "handle": "handle_wma = iMA(_Symbol, _Period, InpWMAPeriod, 0, MODE_LWMA, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpWMAPeriod, 0, MODE_LWMA, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double wma_val[];\n"
-                    "   ArraySetAsSeries(wma_val, true);\n"
-                    "   if(CopyBuffer(handle_wma, 0, 0, 4, wma_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "hma":
             period = int(p.get("window", p.get("period", p.get("length", 20))))
             return {
                 "param": f"input int      InpHMAPeriod = {period};  // HMA Period",
-                "handle": "handle_hma = iMA(_Symbol, _Period, InpHMAPeriod, 0, MODE_LWMA, PRICE_WEIGHTED);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpHMAPeriod, 0, MODE_LWMA, PRICE_WEIGHTED);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double hma_val[];\n"
-                    "   ArraySetAsSeries(hma_val, true);\n"
-                    "   if(CopyBuffer(handle_hma, 0, 0, 4, hma_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "kama":
             period = int(p.get("window", p.get("period", 10)))
             return {
                 "param": f"input int      InpKAMAPeriod = {period}; // KAMA Period",
-                "handle": "handle_kama = iMA(_Symbol, _Period, InpKAMAPeriod, 0, MODE_EMA, PRICE_TYPICAL);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpKAMAPeriod, 0, MODE_EMA, PRICE_TYPICAL);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double kama_val[];\n"
-                    "   ArraySetAsSeries(kama_val, true);\n"
-                    "   if(CopyBuffer(handle_kama, 0, 0, 4, kama_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "atr":
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpATRPeriod = {period};  // ATR Period",
-                "handle": "handle_atr = iATR(_Symbol, _Period, InpATRPeriod);",
+                "handle": f"handle_{clean_name} = iATR(_Symbol, _Period, InpATRPeriod);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double atr_val[];\n"
-                    "   ArraySetAsSeries(atr_val, true);\n"
-                    "   if(CopyBuffer(handle_atr, 0, 0, 4, atr_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "aroon":
             period = int(p.get("window", p.get("period", 25)))
             return {
                 "param": f"input int      InpAroonPeriod = {period}; // Aroon Period",
-                "handle": "handle_aroon = iAroon(_Symbol, _Period, InpAroonPeriod);",
+                "handle": f"handle_{clean_name} = iAroon(_Symbol, _Period, InpAroonPeriod);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double aroon_val[];\n"
-                    "   ArraySetAsSeries(aroon_val, true);\n"
-                    "   if(CopyBuffer(handle_aroon, 0, 0, 4, aroon_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "psar":
@@ -109,12 +109,12 @@ class MT5Exporter:
             max_step = float(p.get("max_step", p.get("max_af", 0.2)))
             return {
                 "param": f"input double   InpPSARStep = {step:.3f}; // PSAR Step\ninput double   InpPSARMax  = {max_step:.3f};  // PSAR Max",
-                "handle": "handle_psar = iSAR(_Symbol, _Period, InpPSARStep, InpPSARMax);",
+                "handle": f"handle_{clean_name} = iSAR(_Symbol, _Period, InpPSARStep, InpPSARMax);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double psar_val[];\n"
-                    "   ArraySetAsSeries(psar_val, true);\n"
-                    "   if(CopyBuffer(handle_psar, 0, 0, 4, psar_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "macd":
@@ -123,12 +123,16 @@ class MT5Exporter:
             sig = int(p.get("window_sign", p.get("signal", 9)))
             return {
                 "param": f"input int      InpMACDFast = {fast}; // MACD Fast\ninput int      InpMACDSlow = {slow}; // MACD Slow\ninput int      InpMACDSig  = {sig};  // MACD Signal",
-                "handle": "handle_macd = iMACD(_Symbol, _Period, InpMACDFast, InpMACDSlow, InpMACDSig, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iMACD(_Symbol, _Period, InpMACDFast, InpMACDSlow, InpMACDSig, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double macd_val[];\n"
-                    "   ArraySetAsSeries(macd_val, true);\n"
-                    "   if(CopyBuffer(handle_macd, 0, 0, 4, macd_val) < 2) return;"
+                    f"   double {clean_name}_main[], {clean_name}_sig[];\n"
+                    f"   ArraySetAsSeries({clean_name}_main, true);\n"
+                    f"   ArraySetAsSeries({clean_name}_sig, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_main) < 2) return;\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 1, 0, 4, {clean_name}_sig) < 2) return;\n"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   for(int i=0; i<4; i++) {clean_name}_val[i] = {clean_name}_main[i] - {clean_name}_sig[i];\n"
                 )
             }
         elif clean_name in ["bollinger_bands", "bbands"]:
@@ -136,12 +140,22 @@ class MT5Exporter:
             dev = float(p.get("window_dev", p.get("std", p.get("deviation", 2.0))))
             return {
                 "param": f"input int      InpBBPeriod = {period};   // Bollinger Period\ninput double   InpBBDev    = {dev:.2f};  // Bollinger Deviation",
-                "handle": "handle_bbands = iBands(_Symbol, _Period, InpBBPeriod, 0, InpBBDev, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iBands(_Symbol, _Period, InpBBPeriod, 0, InpBBDev, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double bbands_val[];\n"
-                    "   ArraySetAsSeries(bbands_val, true);\n"
-                    "   if(CopyBuffer(handle_bbands, 0, 0, 4, bbands_val) < 2) return;"
+                    f"   double {clean_name}_upper[], {clean_name}_lower[], {clean_name}_close[];\n"
+                    f"   ArraySetAsSeries({clean_name}_upper, true);\n"
+                    f"   ArraySetAsSeries({clean_name}_lower, true);\n"
+                    f"   ArraySetAsSeries({clean_name}_close, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 1, 0, 4, {clean_name}_upper) < 2) return;\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 2, 0, 4, {clean_name}_lower) < 2) return;\n"
+                    f"   if(CopyClose(_Symbol, _Period, 0, 4, {clean_name}_close) < 2) return;\n"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   for(int i=0; i<4; i++) {{\n"
+                    f"       double diff = {clean_name}_upper[i] - {clean_name}_lower[i];\n"
+                    f"       if(diff != 0) {clean_name}_val[i] = ({clean_name}_close[i] - {clean_name}_lower[i]) / diff;\n"
+                    f"       else {clean_name}_val[i] = 0;\n"
+                    f"   }}\n"
                 )
             }
         elif clean_name in ["keltner_channel", "kc"]:
@@ -149,121 +163,141 @@ class MT5Exporter:
             mult = float(p.get("multiplier", p.get("scalar", p.get("deviation", 2.0))))
             return {
                 "param": f"input int      InpKCPeriod = {period};   // Keltner Period\ninput double   InpKCDev    = {mult:.2f}; // Keltner Multiplier",
-                "handle": "handle_keltner_channel = iBands(_Symbol, _Period, InpKCPeriod, 0, InpKCDev, PRICE_TYPICAL);",
+                "handle": f"handle_{clean_name} = iBands(_Symbol, _Period, InpKCPeriod, 0, InpKCDev, PRICE_TYPICAL);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double keltner_channel_val[];\n"
-                    "   ArraySetAsSeries(keltner_channel_val, true);\n"
-                    "   if(CopyBuffer(handle_keltner_channel, 0, 0, 4, keltner_channel_val) < 2) return;"
+                    f"   double {clean_name}_upper[], {clean_name}_lower[], {clean_name}_close[];\n"
+                    f"   ArraySetAsSeries({clean_name}_upper, true);\n"
+                    f"   ArraySetAsSeries({clean_name}_lower, true);\n"
+                    f"   ArraySetAsSeries({clean_name}_close, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 1, 0, 4, {clean_name}_upper) < 2) return;\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 2, 0, 4, {clean_name}_lower) < 2) return;\n"
+                    f"   if(CopyClose(_Symbol, _Period, 0, 4, {clean_name}_close) < 2) return;\n"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   for(int i=0; i<4; i++) {{\n"
+                    f"       double diff = {clean_name}_upper[i] - {clean_name}_lower[i];\n"
+                    f"       if(diff != 0) {clean_name}_val[i] = ({clean_name}_close[i] - {clean_name}_lower[i]) / diff;\n"
+                    f"       else {clean_name}_val[i] = 0;\n"
+                    f"   }}\n"
                 )
             }
-        elif clean_name in ["williams_r", "williams_pctr", "willr"]:
+        elif clean_name in ["williams_r", "williams_pctr", "williams_pct_r", "willr", "wpr"]:
             period = int(p.get("lbp", p.get("window", p.get("period", 14))))
             return {
                 "param": f"input int      InpWPRPeriod = {period};  // Williams %R Period",
-                "handle": "handle_williams_r = iWPR(_Symbol, _Period, InpWPRPeriod);",
+                "handle": f"handle_{clean_name} = iWPR(_Symbol, _Period, InpWPRPeriod);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double williams_r_val[];\n"
-                    "   ArraySetAsSeries(williams_r_val, true);\n"
-                    "   if(CopyBuffer(handle_williams_r, 0, 0, 4, williams_r_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name in ["stochastic", "stoch"]:
             k = int(p.get("window", p.get("k_period", p.get("k", 14))))
             d = int(p.get("smooth_window", p.get("d_period", p.get("d", 3))))
-            slowing = int(p.get("slowing", 3))
+            slowing = int(p.get("slowing", 1)) # Must be 1 to match python ta's raw unsmoothed %K stoch()
             return {
                 "param": f"input int      InpStochK = {k}; // Stochastic %K\ninput int      InpStochD = {d};  // Stochastic %D\ninput int      InpStochSlowing = {slowing}; // Stochastic Slowing",
-                "handle": "handle_stochastic = iStochastic(_Symbol, _Period, InpStochK, InpStochD, InpStochSlowing, MODE_SMA, STO_LOWHIGH);",
+                "handle": f"handle_{clean_name} = iStochastic(_Symbol, _Period, InpStochK, InpStochD, InpStochSlowing, MODE_SMA, STO_LOWHIGH);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double stochastic_val[];\n"
-                    "   ArraySetAsSeries(stochastic_val, true);\n"
-                    "   if(CopyBuffer(handle_stochastic, 0, 0, 4, stochastic_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "stochrsi":
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpStochRSIPeriod = {period}; // StochRSI Period",
-                "handle": "handle_stochrsi = iRSI(_Symbol, _Period, InpStochRSIPeriod, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iRSI(_Symbol, _Period, InpStochRSIPeriod, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double stochrsi_val[];\n"
-                    "   ArraySetAsSeries(stochrsi_val, true);\n"
-                    "   if(CopyBuffer(handle_stochrsi, 0, 0, 4, stochrsi_val) < 2) return;"
+                    f"   double {clean_name}_rsi[];\n"
+                    f"   ArraySetAsSeries({clean_name}_rsi, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, InpStochRSIPeriod + 4, {clean_name}_rsi) < InpStochRSIPeriod) return;\n"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   for(int i=0; i<4; i++) {{\n"
+                    f"       double min_rsi = 100.0, max_rsi = 0.0;\n"
+                    f"       for(int j=0; j<InpStochRSIPeriod; j++) {{\n"
+                    f"           if({clean_name}_rsi[i+j] < min_rsi) min_rsi = {clean_name}_rsi[i+j];\n"
+                    f"           if({clean_name}_rsi[i+j] > max_rsi) max_rsi = {clean_name}_rsi[i+j];\n"
+                    f"       }}\n"
+                    f"       if(max_rsi - min_rsi != 0) {clean_name}_val[i] = ({clean_name}_rsi[i] - min_rsi) / (max_rsi - min_rsi);\n"
+                    f"       else {clean_name}_val[i] = 0;\n"
+                    f"   }}\n"
                 )
             }
         elif clean_name == "obv":
             return {
                 "param": "// OBV indicator (Volume Tick)",
-                "handle": "handle_obv = iOBV(_Symbol, _Period, VOLUME_TICK);",
+                "handle": f"handle_{clean_name} = iOBV(_Symbol, _Period, VOLUME_TICK);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double obv_val[];\n"
-                    "   ArraySetAsSeries(obv_val, true);\n"
-                    "   if(CopyBuffer(handle_obv, 0, 0, 4, obv_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "mfi":
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpMFIPeriod = {period};  // MFI Period",
-                "handle": "handle_mfi = iMFI(_Symbol, _Period, InpMFIPeriod, VOLUME_TICK);",
+                "handle": f"handle_{clean_name} = iMFI(_Symbol, _Period, InpMFIPeriod, VOLUME_TICK);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double mfi_val[];\n"
-                    "   ArraySetAsSeries(mfi_val, true);\n"
-                    "   if(CopyBuffer(handle_mfi, 0, 0, 4, mfi_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "vwap":
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpVWAPPeriod = {period}; // VWAP Period",
-                "handle": "handle_vwap = iMA(_Symbol, _Period, InpVWAPPeriod, 0, MODE_LWMA, PRICE_WEIGHTED);",
+                "handle": f"handle_{clean_name} = iMA(_Symbol, _Period, InpVWAPPeriod, 0, MODE_LWMA, PRICE_WEIGHTED);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double vwap_val[];\n"
-                    "   ArraySetAsSeries(vwap_val, true);\n"
-                    "   if(CopyBuffer(handle_vwap, 0, 0, 4, vwap_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "cci":
             period = int(p.get("window", p.get("period", 20)))
             return {
                 "param": f"input int      InpCCIPeriod = {period};  // CCI Period",
-                "handle": "handle_cci = iCCI(_Symbol, _Period, InpCCIPeriod, PRICE_TYPICAL);",
+                "handle": f"handle_{clean_name} = iCCI(_Symbol, _Period, InpCCIPeriod, PRICE_TYPICAL);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double cci_val[];\n"
-                    "   ArraySetAsSeries(cci_val, true);\n"
-                    "   if(CopyBuffer(handle_cci, 0, 0, 4, cci_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "adx":
             period = int(p.get("window", p.get("period", 14)))
             return {
                 "param": f"input int      InpADXPeriod = {period};  // ADX Period",
-                "handle": "handle_adx = iADX(_Symbol, _Period, InpADXPeriod);",
+                "handle": f"handle_{clean_name} = iADX(_Symbol, _Period, InpADXPeriod);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double adx_val[];\n"
-                    "   ArraySetAsSeries(adx_val, true);\n"
-                    "   if(CopyBuffer(handle_adx, 0, 0, 4, adx_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "trix":
             period = int(p.get("window", p.get("period", 15)))
             return {
                 "param": f"input int      InpTRIXPeriod = {period}; // TRIX Period",
-                "handle": "handle_trix = iTRIX(_Symbol, _Period, InpTRIXPeriod, PRICE_CLOSE);",
+                "handle": f"handle_{clean_name} = iTRIX(_Symbol, _Period, InpTRIXPeriod, PRICE_CLOSE);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double trix_val[];\n"
-                    "   ArraySetAsSeries(trix_val, true);\n"
-                    "   if(CopyBuffer(handle_trix, 0, 0, 4, trix_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "ichimoku":
@@ -272,35 +306,35 @@ class MT5Exporter:
             senkou = int(p.get("window3", p.get("senkou", 52)))
             return {
                 "param": f"input int      InpIchiTenkan = {tenkan};   // Tenkan-sen\ninput int      InpIchiKijun  = {kijun};  // Kijun-sen\ninput int      InpIchiSenkou = {senkou};  // Senkou Span B",
-                "handle": "handle_ichimoku = iIchimoku(_Symbol, _Period, InpIchiTenkan, InpIchiKijun, InpIchiSenkou);",
+                "handle": f"handle_{clean_name} = iIchimoku(_Symbol, _Period, InpIchiTenkan, InpIchiKijun, InpIchiSenkou);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double ichimoku_val[];\n"
-                    "   ArraySetAsSeries(ichimoku_val, true);\n"
-                    "   if(CopyBuffer(handle_ichimoku, 0, 0, 4, ichimoku_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
-        elif clean_name == "awesome_oscillator":
+        elif clean_name in ["awesome_oscillator", "ao"]:
             return {
                 "param": "// Awesome Oscillator",
-                "handle": "handle_awesome_oscillator = iAO(_Symbol, _Period);",
+                "handle": f"handle_{clean_name} = iAO(_Symbol, _Period);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double awesome_oscillator_val[];\n"
-                    "   ArraySetAsSeries(awesome_oscillator_val, true);\n"
-                    "   if(CopyBuffer(handle_awesome_oscillator, 0, 0, 4, awesome_oscillator_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name == "force_index":
             period = int(p.get("window", p.get("period", 13)))
             return {
                 "param": f"input int      InpForcePeriod = {period}; // Force Index Period",
-                "handle": "handle_force_index = iForce(_Symbol, _Period, InpForcePeriod, MODE_SMA, VOLUME_TICK);",
+                "handle": f"handle_{clean_name} = iForce(_Symbol, _Period, InpForcePeriod, MODE_SMA, VOLUME_TICK);",
                 "type": "handle",
                 "buffer_copy": (
-                    "   double force_index_val[];\n"
-                    "   ArraySetAsSeries(force_index_val, true);\n"
-                    "   if(CopyBuffer(handle_force_index, 0, 0, 4, force_index_val) < 2) return;"
+                    f"   double {clean_name}_val[];\n"
+                    f"   ArraySetAsSeries({clean_name}_val, true);\n"
+                    f"   if(CopyBuffer(handle_{clean_name}, 0, 0, 4, {clean_name}_val) < 2) return;"
                 )
             }
         elif clean_name in ["donchian_channel", "dc"]:
@@ -309,56 +343,63 @@ class MT5Exporter:
                 "type": "inline",
                 "param": f"input int InpDCPeriod = {period}; // Donchian Period",
                 "code": (
-                    f"   int dc_h_idx = iHighest(_Symbol, _Period, MODE_HIGH, InpDCPeriod, 1);\n"
-                    f"   int dc_l_idx = iLowest(_Symbol, _Period, MODE_LOW, InpDCPeriod, 1);\n"
-                    f"   double donchian_channel_val[4];\n"
-                    f"   donchian_channel_val[1] = (iHigh(_Symbol, _Period, dc_h_idx) + iLow(_Symbol, _Period, dc_l_idx)) / 2.0;"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   for(int i=0; i<4; i++) {{\n"
+                    f"       int dc_h_idx = iHighest(_Symbol, _Period, MODE_HIGH, InpDCPeriod, i);\n"
+                    f"       int dc_l_idx = iLowest(_Symbol, _Period, MODE_LOW, InpDCPeriod, i);\n"
+                    f"       double upper = iHigh(_Symbol, _Period, dc_h_idx);\n"
+                    f"       double lower = iLow(_Symbol, _Period, dc_l_idx);\n"
+                    f"       double close_price = iClose(_Symbol, _Period, i);\n"
+                    f"       double diff = upper - lower;\n"
+                    f"       if(diff != 0) {clean_name}_val[i] = (close_price - lower) / diff;\n"
+                    f"       else {clean_name}_val[i] = 0;\n"
+                    f"   }}"
                 )
             }
         elif clean_name == "daily_log_return":
             return {
                 "type": "inline",
                 "code": (
-                    "   double daily_log_return_val[4];\n"
-                    "   daily_log_return_val[1] = MathLog(iClose(_Symbol, _Period, 1) / (iClose(_Symbol, _Period, 2) > 0.0 ? iClose(_Symbol, _Period, 2) : 1.0));\n"
-                    "   daily_log_return_val[2] = MathLog(iClose(_Symbol, _Period, 2) / (iClose(_Symbol, _Period, 3) > 0.0 ? iClose(_Symbol, _Period, 3) : 1.0));"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   {clean_name}_val[1] = MathLog(iClose(_Symbol, _Period, 1) / (iClose(_Symbol, _Period, 2) > 0.0 ? iClose(_Symbol, _Period, 2) : 1.0));\n"
+                    f"   {clean_name}_val[2] = MathLog(iClose(_Symbol, _Period, 2) / (iClose(_Symbol, _Period, 3) > 0.0 ? iClose(_Symbol, _Period, 3) : 1.0));"
                 )
             }
         elif clean_name == "daily_return":
             return {
                 "type": "inline",
                 "code": (
-                    "   double daily_return_val[4];\n"
-                    "   daily_return_val[1] = (iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 2)) / (iClose(_Symbol, _Period, 2) > 0.0 ? iClose(_Symbol, _Period, 2) : 1.0);\n"
-                    "   daily_return_val[2] = (iClose(_Symbol, _Period, 2) - iClose(_Symbol, _Period, 3)) / (iClose(_Symbol, _Period, 3) > 0.0 ? iClose(_Symbol, _Period, 3) : 1.0);"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   {clean_name}_val[1] = (iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 2)) / (iClose(_Symbol, _Period, 2) > 0.0 ? iClose(_Symbol, _Period, 2) : 1.0);\n"
+                    f"   {clean_name}_val[2] = (iClose(_Symbol, _Period, 2) - iClose(_Symbol, _Period, 3)) / (iClose(_Symbol, _Period, 3) > 0.0 ? iClose(_Symbol, _Period, 3) : 1.0);"
                 )
             }
         elif clean_name == "cumulative_return":
             return {
                 "type": "inline",
                 "code": (
-                    "   double cumulative_return_val[4];\n"
-                    "   cumulative_return_val[1] = (iClose(_Symbol, _Period, 1) - iOpen(_Symbol, _Period, 20)) / (iOpen(_Symbol, _Period, 20) > 0.0 ? iOpen(_Symbol, _Period, 20) : 1.0);"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   {clean_name}_val[1] = (iClose(_Symbol, _Period, 1) - iOpen(_Symbol, _Period, 20)) / (iOpen(_Symbol, _Period, 20) > 0.0 ? iOpen(_Symbol, _Period, 20) : 1.0);"
                 )
             }
         elif clean_name == "vortex":
             return {
                 "type": "inline",
                 "code": (
-                    "   double vortex_val[4];\n"
-                    "   double v_vm_p = MathAbs(iHigh(_Symbol, _Period, 1) - iLow(_Symbol, _Period, 2));\n"
-                    "   double v_tr = MathMax(iHigh(_Symbol, _Period, 1) - iLow(_Symbol, _Period, 1), MathAbs(iHigh(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 2)));\n"
-                    "   vortex_val[1] = v_vm_p / (v_tr > 0.0 ? v_tr : 0.0001);"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   double v_vm_p = MathAbs(iHigh(_Symbol, _Period, 1) - iLow(_Symbol, _Period, 2));\n"
+                    f"   double v_tr = MathMax(iHigh(_Symbol, _Period, 1) - iLow(_Symbol, _Period, 1), MathAbs(iHigh(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 2)));\n"
+                    f"   {clean_name}_val[1] = v_vm_p / (v_tr > 0.0 ? v_tr : 0.0001);"
                 )
             }
         elif clean_name == "ppo":
             return {
                 "type": "inline",
                 "code": (
-                    "   double ppo_val[4];\n"
-                    "   double ppo_fast = iMA(_Symbol, _Period, 12, 0, MODE_EMA, PRICE_CLOSE);\n"
-                    "   double ppo_slow = iMA(_Symbol, _Period, 26, 0, MODE_EMA, PRICE_CLOSE);\n"
-                    "   ppo_val[1] = ((iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 12)) / (iClose(_Symbol, _Period, 12) > 0.0 ? iClose(_Symbol, _Period, 12) : 1.0)) * 100.0;"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   double ppo_fast = iMA(_Symbol, _Period, 12, 0, MODE_EMA, PRICE_CLOSE);\n"
+                    f"   double ppo_slow = iMA(_Symbol, _Period, 26, 0, MODE_EMA, PRICE_CLOSE);\n"
+                    f"   {clean_name}_val[1] = ((iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, 12)) / (iClose(_Symbol, _Period, 12) > 0.0 ? iClose(_Symbol, _Period, 12) : 1.0)) * 100.0;"
                 )
             }
         elif clean_name == "roc":
@@ -366,8 +407,8 @@ class MT5Exporter:
             return {
                 "type": "inline",
                 "code": (
-                    f"   double roc_val[4];\n"
-                    f"   roc_val[1] = ((iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, {period})) / (iClose(_Symbol, _Period, {period}) > 0.0 ? iClose(_Symbol, _Period, {period}) : 1.0)) * 100.0;"
+                    f"   double {clean_name}_val[4];\n"
+                    f"   {clean_name}_val[1] = ((iClose(_Symbol, _Period, 1) - iClose(_Symbol, _Period, {period})) / (iClose(_Symbol, _Period, {period}) > 0.0 ? iClose(_Symbol, _Period, {period}) : 1.0)) * 100.0;"
                 )
             }
         else:
@@ -852,13 +893,13 @@ void OnTick()
                continue;
             }}
 
-            // Exit Long if buy condition is no longer true or opposite sell condition triggered
-            if(pos_type == POSITION_TYPE_BUY && (!buy_condition || sell_condition))
+            // Exit Long only if opposite sell condition triggered
+            if(pos_type == POSITION_TYPE_BUY && sell_condition)
             {{
                trade.PositionClose(ticket);
             }}
-            // Exit Short if sell condition is no longer true or opposite buy condition triggered
-            else if(pos_type == POSITION_TYPE_SELL && (!sell_condition || buy_condition))
+            // Exit Short only if opposite buy condition triggered
+            else if(pos_type == POSITION_TYPE_SELL && buy_condition)
             {{
                trade.PositionClose(ticket);
             }}
