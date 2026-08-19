@@ -593,6 +593,23 @@ class MT5Exporter:
                     f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
                 )
             }
+        elif b in ["close", "open", "high", "low", "volume", "tick_volume"]:
+            # Raw price/volume series read directly from the chart. Parity with
+            # IndicatorCalculator.calculate_single (no transformation). Never
+            # fall through to an iCustom EMA approximation.
+            copy_func = {
+                "close": "CopyClose", "open": "CopyOpen", "high": "CopyHigh",
+                "low": "CopyLow", "volume": "CopyTickVolume",
+                "tick_volume": "CopyTickVolume"
+            }[b]
+            return {
+                "type": "inline",
+                "code": (
+                    f"   double {var_name}_val[];\n"
+                    f"   ArraySetAsSeries({var_name}_val, true);\n"
+                    f"   if({copy_func}(_Symbol, _Period, 0, 4, {var_name}_val) < 2) return;"
+                )
+            }
         else:
             period = int(p.get("window", p.get("period", 14)))
             return {
@@ -638,6 +655,7 @@ class MT5Exporter:
         sizing_mode = 0 if sizing_mode_str == "lots" else 1
         lot_size = float(risk_cfg.get("lotSize") or risk_cfg.get("lot_size") or 0.1)
         risk_pct = float(risk_cfg.get("riskPct") or risk_cfg.get("risk_pct") or 1.0)
+        max_trades = int(risk_cfg.get("maxSimultaneousTrades") or risk_cfg.get("max_simultaneous_trades") or 1)
         
         # 2. Trade Direction
         direction_str = str(risk_cfg.get("direction", "both")).lower()
@@ -833,6 +851,7 @@ input ENUM_STOP_TYPE          InpTakeProfitType       = {tp_type_val};    // Tak
 input double                  InpTakeProfitPips       = {tp_pips:.1f};   // Take Profit Pips
 input double                  InpTakeProfitATRMult    = {tp_atr_mult:.1f};  // Take Profit ATR Multiplier
 input ulong                   InpMagicNumber          = 101202;   // Magic Number
+input int                     InpMaxSimultaneousTrades = {max_trades}; // Max Simultaneous Positions
 
 input group "=== Technical Indicator Parameters ==="
 {inputs_code}
@@ -1094,8 +1113,10 @@ void OnTick()
       }}
    }}
 
-   // --- 2. Verify If We Still Have Any Active Open Position or Pending Order ---
-   bool has_position_or_order = false;
+   // --- 2. Verify How Many Open Positions / Pending Orders We Have ---
+   // Parity with the simulator: new entries are allowed while
+   // positions + pendings < InpMaxSimultaneousTrades (one entry per bar).
+   int position_count = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {{
       ulong ticket = PositionGetTicket(i);
@@ -1104,32 +1125,24 @@ void OnTick()
          string pos_symbol = PositionGetString(POSITION_SYMBOL);
          ulong  pos_magic  = (ulong)PositionGetInteger(POSITION_MAGIC);
          if(pos_symbol == _Symbol && (pos_magic == InpMagicNumber || InpMagicNumber == 0))
-         {{
-            has_position_or_order = true;
-            break;
-         }}
+            position_count++;
       }}
    }}
-   if(!has_position_or_order)
+   int pending_count = 0;
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
    {{
-      for(int i = OrdersTotal() - 1; i >= 0; i--)
+      ulong ticket = OrderGetTicket(i);
+      if(ticket > 0)
       {{
-         ulong ticket = OrderGetTicket(i);
-         if(ticket > 0)
-         {{
-            string ord_symbol = OrderGetString(ORDER_SYMBOL);
-            ulong  ord_magic  = (ulong)OrderGetInteger(ORDER_MAGIC);
-            if(ord_symbol == _Symbol && (ord_magic == InpMagicNumber || InpMagicNumber == 0))
-            {{
-               has_position_or_order = true;
-               break;
-            }}
-         }}
+         string ord_symbol = OrderGetString(ORDER_SYMBOL);
+         ulong  ord_magic  = (ulong)OrderGetInteger(ORDER_MAGIC);
+         if(ord_symbol == _Symbol && (ord_magic == InpMagicNumber || InpMagicNumber == 0))
+            pending_count++;
       }}
    }}
 
-   // --- 3. Order Entry (Strictly only when flat and no pending order) ---
-   if(!has_position_or_order)
+   // --- 3. Order Entry (only while capacity remains) ---
+   if(position_count + pending_count < InpMaxSimultaneousTrades)
    {{
       double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
       // 1 pip = 10 points on 3/5-digit quotes (0.00001 on 5-digit EURUSD,

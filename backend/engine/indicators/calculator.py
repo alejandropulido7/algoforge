@@ -44,6 +44,13 @@ class IndicatorCalculator:
         low = df_norm['Low']
         volume = df_norm['Volume']
 
+        # Raw price series (no transformation). Parity: the MQL5 exporter
+        # reads them from CopyClose/CopyOpen/CopyHigh/CopyLow/CopyTickVolume.
+        if func_name in ("close", "open", "high", "low", "volume", "tick_volume"):
+            col = {"close": "Close", "open": "Open", "high": "High", "low": "Low",
+                   "volume": "Volume", "tick_volume": "Volume"}[func_name]
+            return df_norm[col]
+
         try:
             # === 1. MOMENTUM ===
             if func_name == 'rsi':

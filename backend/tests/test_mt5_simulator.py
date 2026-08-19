@@ -235,3 +235,213 @@ def test_mt5_simulator_atr_uses_last_closed_bar():
     # SL = entry - 1.0 * ATR[2] = 100 - 5.0 -> the bar-3 low (94) hits it.
     assert t["exit_reason"] == "sl"
     assert round(t["sl_price"], 4) == 95.0
+
+def test_atr_fallback_matches_ta_wilder_rma():
+    # Without an explicit atr_array the simulator must reproduce ta's Wilder
+    # RMA (like ATR.mq5), NOT a simple SMA. ATR-based SL must equal
+    # entry - mult * ta.ATR[last_closed].
+    n = 40
+    rng = np.random.default_rng(42)
+    close = 100.0 + np.cumsum(rng.normal(0, 1.0, n))
+    high = close + np.abs(rng.normal(0, 0.5, n))
+    low = close - np.abs(rng.normal(0, 0.5, n))
+    df = pd.DataFrame({
+        "Open": close,
+        "High": high,
+        "Low": low,
+        "Close": close,
+    })
+
+    from ta.volatility import AverageTrueRange
+    ta_atr = AverageTrueRange(
+        high=df["High"], low=df["Low"], close=df["Close"], window=14
+    ).average_true_range().fillna(0.0).to_numpy()
+
+    # Guarantee the SL is hit right after entry (random walk may drift away).
+    df.iloc[22, df.columns.get_loc("Low")] = 0.0
+
+    buy_signals = np.zeros(n, dtype=bool)
+    sell_signals = np.zeros(n, dtype=bool)
+    buy_signals[20] = True  # entry executes at bar 21 open, SL sized with ATR[20]
+
+    sim = MT5TradeSimulator({
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "atr",
+        "slAtrMult": 2.0,
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)  # no atr_array passed
+    assert res.total_trades == 1
+    t = res.trade_log[0]
+    expected_sl = round(df["Open"].iloc[21] - 2.0 * ta_atr[20], 5)
+    assert round(t["sl_price"], 5) == expected_sl
+
+def test_signal_flip_reenters_opposite_at_same_open():
+    # EA parity: on a signal flip the position is closed AND the opposite
+    # position is opened at the SAME bar open (the simulator used to wait
+    # one extra bar, shifting every flip entry by one bar vs MT5).
+    df = pd.DataFrame({
+        'Open': [100.0] * 10,
+        'High': [100.1] * 10,
+        'Low': [99.9] * 10,
+        'Close': [100.0] * 10,
+    })
+    buy_signals = np.zeros(10, dtype=bool)
+    sell_signals = np.zeros(10, dtype=bool)
+    buy_signals[2] = True   # buy entry at bar 3 open
+    sell_signals[3] = True  # flip at bar 4 open
+    buy_signals[5] = True   # flip back at bar 6 open
+
+    sim = MT5TradeSimulator({
+        "direction": "both",
+        "maxSimultaneousTrades": 1,
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)
+    assert res.total_trades == 2
+    t0, t1 = res.trade_log
+    # Buy closed at bar 4 open...
+    assert t0["direction"] == "buy"
+    assert t0["entry_time"] == str(df.index[3])
+    assert t0["exit_time"] == str(df.index[4])
+    assert t0["exit_reason"] == "signal"
+    # ...and the short is entered at the SAME bar 4 open (no extra bar delay).
+    assert t1["direction"] == "sell"
+    assert t1["entry_time"] == str(df.index[4])
+    assert t1["exit_time"] == str(df.index[6])
+    assert t1["exit_reason"] == "signal"
+    assert t0["exit_price"] == t1["entry_price"]
+
+def test_flip_respects_trade_direction_filter():
+    # With direction=long the flip must NOT open a short position.
+    df = pd.DataFrame({
+        'Open': [100.0] * 10,
+        'High': [100.1] * 10,
+        'Low': [99.9] * 10,
+        'Close': [100.0] * 10,
+    })
+    buy_signals = np.zeros(10, dtype=bool)
+    sell_signals = np.zeros(10, dtype=bool)
+    buy_signals[2] = True
+    sell_signals[3] = True
+
+    sim = MT5TradeSimulator({
+        "direction": "long",
+        "maxSimultaneousTrades": 1,
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)
+    assert res.total_trades == 1
+    assert res.trade_log[0]["direction"] == "buy"
+
+def test_fill_mode_open_only_vs_intrabar():
+    # Bar 3 has open=100 (never beyond SL=99.5) but low=99.5.
+    # intrabar: SL fills at the exact 99.5 level.
+    # open_only: fills only when the OPEN gaps beyond the level -> no fill.
+    df = pd.DataFrame({
+        'Open': [100.0] * 8,
+        'High': [100.5] * 8,
+        'Low': [99.5] * 8,
+        'Close': [100.0] * 8,
+    })
+    buy_signals = np.zeros(8, dtype=bool)
+    sell_signals = np.zeros(8, dtype=bool)
+    buy_signals[2] = True
+
+    common = {
+        "direction": "long",
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "pips",
+        "slPips": 1.0,
+        "tpType": "none",
+        "pointSize": 0.5,
+        "spreadPips": 0.0,
+    }
+    sim_intra = MT5TradeSimulator(common)
+    res_intra = sim_intra.simulate(df, buy_signals, sell_signals)
+    assert res_intra.total_trades == 1
+    assert res_intra.trade_log[0]["exit_reason"] == "sl"
+    assert res_intra.trade_log[0]["exit_price"] == 99.5
+
+    sim_open = MT5TradeSimulator({**common, "fillMode": "open_only"})
+    res_open = sim_open.simulate(df, buy_signals, sell_signals)
+    assert res_open.total_trades == 0
+
+def test_time_exit_fills_at_bar_open():
+    # EA closes on the first tick of the bar where the holding limit is
+    # reached (i.e. at the bar OPEN), not at the bar close.
+    opens = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0]
+    df = pd.DataFrame({
+        'Open': opens,
+        'High': [o + 1.0 for o in opens],
+        'Low': [o - 1.0 for o in opens],
+        'Close': opens,
+    })
+    buy_signals = np.zeros(9, dtype=bool)
+    sell_signals = np.zeros(9, dtype=bool)
+    buy_signals[2] = True  # entry at bar 3 open (103)
+
+    sim = MT5TradeSimulator({
+        "direction": "long",
+        "maxHoldingBars": 5,
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)
+    assert res.total_trades == 1
+    t = res.trade_log[0]
+    assert t["exit_reason"] == "time_exit"
+    assert t["entry_price"] == 103.0
+    # bars_held = 8 - 3 = 5 -> closed at the OPEN of bar 8, not its close.
+    assert t["exit_price"] == opens[8]
+
+def test_direction_short_trades_on_negative_signal():
+    # Parity with the EA: shorts are entered when signal <= 0 (sell side),
+    # never inverted. The old code entered shorts when the signal was >= 0.
+    n = 12
+    df = pd.DataFrame({
+        'Open': [100.0] * n,
+        'High': [100.1] * n,
+        'Low': [99.9] * n,
+        'Close': [100.0] * n,
+    })
+    # raw signal array (not booleans): negative -> short candidates
+    raw = np.full(n, -1.0)
+    raw[5] = 1.0  # long side on bar 5 (no short entry allowed in short mode)
+    buy_signals = (raw > 0.0)
+    sell_signals = (raw <= 0.0)
+
+    sim = MT5TradeSimulator({
+        "direction": "short",
+        "maxSimultaneousTrades": 1,
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)
+    assert res.total_trades == 1
+    t = res.trade_log[0]
+    assert t["direction"] == "sell"
+    # First evaluated signal at bar 1 -> deferred entry executes at open[2]
+    assert t["entry_time"] == str(df.index[2])

@@ -102,6 +102,11 @@ class MT5TradeSimulator:
         self.spread_pips = float(cfg.get("spreadPips", cfg.get("spread_pips", 1.0)))
         # Overnight financing per lot per calendar day held (0 = no swap).
         self.swap_per_lot_per_day = float(cfg.get("swapPerLotPerDay", cfg.get("swap_per_lot_per_day", 0.0)))
+        # SL/TP fill model. "intrabar" (default) fills at the exact level when
+        # the bar range crosses it — matches MT5 tester "Every tick" mode.
+        # "open_only" fills at the bar open when it gaps beyond the level —
+        # matches MT5 tester "Open prices only" mode.
+        self.fill_mode = str(cfg.get("fillMode") or cfg.get("fill_mode") or "intrabar").lower()
 
     def simulate(
         self,
@@ -131,8 +136,20 @@ class MT5TradeSimulator:
         closes = df['Close'].values if 'Close' in df.columns else df.iloc[:, 0].values
 
         if atr_array is None or len(atr_array) != n_bars:
-            tr = np.maximum(highs - lows, np.abs(highs - np.roll(closes, 1)))
-            atr_array = pd.Series(tr).rolling(14).mean().ffill().fillna(0.0).values
+            # Parity with ta.volatility.AverageTrueRange (Wilder RMA) and the
+            # exported ATR.mq5 indicator. The old fallback used a simple SMA
+            # and omitted the |low - prev_close| term, producing different
+            # SL/TP distances than MT5 whenever ATR-based stops were used.
+            prev_close = np.roll(closes, 1)
+            prev_close[0] = opens[0]
+            tr = np.maximum(highs - lows, np.abs(highs - prev_close))
+            tr = np.maximum(tr, np.abs(lows - prev_close))
+            w = 14
+            atr_array = np.zeros(n_bars)
+            if n_bars > w:
+                atr_array[w - 1] = tr[0:w].mean()
+                for idx in range(w, n_bars):
+                    atr_array[idx] = (atr_array[idx - 1] * (w - 1) + tr[idx]) / w
 
         # Bar timestamps for swap (overnight) accounting. Falls back to None
         # for non-datetime indexes (swap disabled).
@@ -160,6 +177,7 @@ class MT5TradeSimulator:
 
         # Deferred execution state
         deferred_entries = [] # list of directions
+        deferred_entry_dirs = []  # opposite-direction entries queued on signal flips
         deferred_exit = False
 
         for i in range(1, n_bars):
@@ -234,6 +252,12 @@ class MT5TradeSimulator:
                     ))
                 active_positions.clear()
                 deferred_exit = False
+                # EA parity: on a signal flip the EA closes the position and
+                # re-opens the opposite one at the SAME bar open. Queue the
+                # opposite direction so Phase 2 executes it at this open.
+                if deferred_entry_dirs:
+                    deferred_entries.extend(deferred_entry_dirs)
+                    deferred_entry_dirs = []
 
             # =============================================================
             # Phase 2: Execute deferred MARKET ENTRY at current bar's Open
@@ -242,6 +266,11 @@ class MT5TradeSimulator:
             # computed from the last CLOSED bar (bar i-1), not the forming bar.
             prev_atr = max(1e-6, atr_array[i - 1]) if i > 0 else curr_atr
             while deferred_entries:
+                if bot_stopped:
+                    # Kill-switch may have been triggered by the exit that
+                    # closed the previous position; drop queued entries.
+                    deferred_entries.clear()
+                    break
                 deferred_entry_dir = deferred_entries.pop(0)
                 if len(active_positions) < self.max_simultaneous_trades:
                     if deferred_entry_dir == "buy":
@@ -271,29 +300,51 @@ class MT5TradeSimulator:
                 bars_held = i - pos["entry_idx"]
 
                 if pos["dir"] == "buy":
-                    if pos["sl"] > 0.0 and curr_low <= pos["sl"]:
-                        exit_price = pos["sl"]
-                        exit_reason = "sl"
-                        closed = True
-                    elif pos["tp"] > 0.0 and curr_high >= pos["tp"]:
-                        exit_price = pos["tp"]
-                        exit_reason = "tp"
-                        closed = True
-                    elif self.max_holding_bars > 0 and bars_held >= self.max_holding_bars:
-                        exit_price = curr_close
+                    if self.fill_mode == "open_only":
+                        if pos["sl"] > 0.0 and curr_open <= pos["sl"]:
+                            exit_price = curr_open
+                            exit_reason = "sl"
+                            closed = True
+                        elif pos["tp"] > 0.0 and curr_open >= pos["tp"]:
+                            exit_price = curr_open
+                            exit_reason = "tp"
+                            closed = True
+                    else:
+                        if pos["sl"] > 0.0 and curr_low <= pos["sl"]:
+                            exit_price = pos["sl"]
+                            exit_reason = "sl"
+                            closed = True
+                        elif pos["tp"] > 0.0 and curr_high >= pos["tp"]:
+                            exit_price = pos["tp"]
+                            exit_reason = "tp"
+                            closed = True
+                    if not closed and self.max_holding_bars > 0 and bars_held >= self.max_holding_bars:
+                        # EA closes on the first tick of the bar where the
+                        # holding limit is reached, i.e. at the bar OPEN.
+                        exit_price = curr_open
                         exit_reason = "time_exit"
                         closed = True
                 elif pos["dir"] == "sell":
-                    if pos["sl"] > 0.0 and curr_high >= pos["sl"]:
-                        exit_price = pos["sl"]
-                        exit_reason = "sl"
-                        closed = True
-                    elif pos["tp"] > 0.0 and curr_low <= pos["tp"]:
-                        exit_price = pos["tp"]
-                        exit_reason = "tp"
-                        closed = True
-                    elif self.max_holding_bars > 0 and bars_held >= self.max_holding_bars:
-                        exit_price = curr_close
+                    if self.fill_mode == "open_only":
+                        if pos["sl"] > 0.0 and curr_open >= pos["sl"]:
+                            exit_price = curr_open
+                            exit_reason = "sl"
+                            closed = True
+                        elif pos["tp"] > 0.0 and curr_open <= pos["tp"]:
+                            exit_price = curr_open
+                            exit_reason = "tp"
+                            closed = True
+                    else:
+                        if pos["sl"] > 0.0 and curr_high >= pos["sl"]:
+                            exit_price = pos["sl"]
+                            exit_reason = "sl"
+                            closed = True
+                        elif pos["tp"] > 0.0 and curr_low <= pos["tp"]:
+                            exit_price = pos["tp"]
+                            exit_reason = "tp"
+                            closed = True
+                    if not closed and self.max_holding_bars > 0 and bars_held >= self.max_holding_bars:
+                        exit_price = curr_open
                         exit_reason = "time_exit"
                         closed = True
 
@@ -380,8 +431,12 @@ class MT5TradeSimulator:
                 has_sell = any(p["dir"] == "sell" for p in active_positions)
                 if has_buy and sell_signals[i]:
                     deferred_exit = True
+                    if can_enter_sell[i]:
+                        deferred_entry_dirs.append("sell")
                 elif has_sell and buy_signals[i]:
                     deferred_exit = True
+                    if can_enter_buy[i]:
+                        deferred_entry_dirs.append("buy")
 
             total_incoming = len(active_positions) + len(pending_orders) + len(deferred_entries)
             if total_incoming < self.max_simultaneous_trades and not bot_stopped:

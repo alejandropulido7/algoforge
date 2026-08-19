@@ -5,6 +5,7 @@ import pandas as pd
 from deap import base, creator, tools, gp
 from .primitives import create_primitive_set
 from .fitness import evaluate_fitness, evaluate_strategy_signals
+from ..indicators.calculator import IndicatorCalculator
 
 class StrategyEvolver:
     """Evolves trading strategies using Genetic Programming (DEAP) matching MT5 risk settings."""
@@ -32,13 +33,21 @@ class StrategyEvolver:
         self.risk_config = risk_config or {}
         self.top_strategies_count = max(1, int(top_strategies_count))
 
-        # Fast training sample for lightning-fast GP search across 50 generations
-        if len(self.df) > 2500:
-            self.eval_df = self.df.iloc[-2500:].copy().reset_index(drop=True)
-            self.eval_indicators = [arr[-2500:] for arr in self.indicator_arrays]
+        # ATR (Wilder RMA, identical to ta and the exported ATR.mq5) used for
+        # ATR-based SL/TP sizing. Computed once and passed to every backtest
+        # so the simulator never falls back to a divergent ATR formula.
+        atr_series = IndicatorCalculator.calculate_single(self.df, "ATR")
+        if isinstance(atr_series, (pd.Series, pd.DataFrame)):
+            self.atr_array = np.nan_to_num(atr_series.fillna(0).to_numpy())
         else:
-            self.eval_df = self.df
-            self.eval_indicators = self.indicator_arrays
+            self.atr_array = np.nan_to_num(np.asarray(atr_series, dtype=float))
+
+        # Evaluate every individual on the FULL dataset. Subsampling to the
+        # last 2500 bars biased fitness towards the most recent market regime
+        # and diverged from the MT5 tester, which backtests the whole history.
+        self.eval_df = self.df
+        self.eval_indicators = self.indicator_arrays
+        self.eval_atr = self.atr_array
 
         self.pset = create_primitive_set(len(self.indicator_names))
         for i, name in enumerate(self.indicator_names):
@@ -72,7 +81,8 @@ class StrategyEvolver:
             self.eval_indicators, 
             self.eval_df, 
             risk_config=self.risk_config, 
-            tree_len=len(individual)
+            tree_len=len(individual),
+            atr_array=self.eval_atr
         )
         return (score,)
 
@@ -119,7 +129,6 @@ class StrategyEvolver:
                 )
 
         results = []
-        direction = self.risk_config.get("direction", "both")
         
         # Evaluate Top Finalists on 100% full dataset
         for i, ind in enumerate(hof):
@@ -129,13 +138,13 @@ class StrategyEvolver:
                 self.indicator_arrays, 
                 self.df, 
                 risk_config=self.risk_config,
-                tree_len=len(ind)
+                tree_len=len(ind),
+                atr_array=self.atr_array
             )
             entries, exits = evaluate_strategy_signals(
                 func, 
                 self.indicator_arrays, 
-                len(self.df),
-                direction=direction
+                len(self.df)
             )
             results.append({
                 "id": f"gp_strategy_{i+1}",

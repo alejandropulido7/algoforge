@@ -78,9 +78,12 @@ def test_mt5_exporter_exact_inputs():
     assert "InpTakeProfitATRMult    = 4.0;" in code
 
     # 3. Check Indicator Inputs
-    assert "InpRSIPeriod = 21;" in code
-    assert "InpEMAPeriod = 50;" in code
-    assert "InpSMAPeriod = 200;" in code
+    assert "Inp_rsi_Period = 21;" in code
+    assert "Inp_ema_Period = 50;" in code
+    assert "Inp_sma_Period = 200;" in code
+
+    # 4. Max simultaneous positions exported
+    assert "InpMaxSimultaneousTrades = 1;" in code
 
 def test_onnx_mt5_exporter_exact_inputs():
     strategy = {
@@ -154,11 +157,56 @@ def test_mt5_exporter_williams_and_vwap():
     exporter = MT5Exporter()
     code = exporter.export(strategy)
 
-    # Verify handles match exactly
+    # Verify handles match exactly (iCustom AlgoForge ports, not built-ins)
     assert "int handle_williams_pctr;" in code
-    assert "handle_williams_pctr = iWPR(_Symbol, _Period, InpWPRPeriod);" in code
+    assert "iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\WilliamsR\", Inp_williams_pctr_Period);" in code
     assert "IndicatorRelease(handle_williams_pctr);" in code
     assert "double williams_pctr_val[];" in code
     assert "CopyBuffer(handle_williams_pctr, 0, 0, 4, williams_pctr_val)" in code
     assert "williams_pctr_val[1]" in code
-    assert "handle_williams_r" not in code
+    assert "iWPR" not in code
+
+def test_mt5_exporter_max_simultaneous_trades_exported():
+    strategy = {
+        "id": "MultiPos_01",
+        "rank": 1,
+        "strategy_tree": "gt(RSI, c_50)",
+        "indicator_config": [{"name": "RSI", "params": {}}],
+        "risk_config": {
+            "direction": "both",
+            "orderType": "market",
+            "maxSimultaneousTrades": 3,
+            "slType": "pips",
+            "tpType": "pips"
+        }
+    }
+    code = MT5Exporter().export(strategy)
+    assert "InpMaxSimultaneousTrades = 3;" in code
+    assert "position_count + pending_count < InpMaxSimultaneousTrades" in code
+
+def test_mt5_exporter_raw_price_series_inline():
+    strategy = {
+        "id": "PriceSeries_01",
+        "rank": 1,
+        "strategy_tree": "and(gt(Close, SMA), gt(Open, Low))",
+        "indicator_config": [
+            {"name": "Close", "params": {}},
+            {"name": "Open", "params": {}},
+            {"name": "Low", "params": {}},
+            {"name": "SMA", "params": {"period": 20}}
+        ],
+        "risk_config": {
+            "direction": "long",
+            "orderType": "market",
+            "slType": "pips",
+            "tpType": "pips"
+        }
+    }
+    code = MT5Exporter().export(strategy)
+    assert "CopyClose(_Symbol, _Period, 0, 4, close_val)" in code
+    assert "CopyOpen(_Symbol, _Period, 0, 4, open_val)" in code
+    assert "CopyLow(_Symbol, _Period, 0, 4, low_val)" in code
+    assert "close_val[1]" in code
+    assert "open_val[1]" in code
+    assert "low_val[1]" in code
+    assert "iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\EMA\"" not in code

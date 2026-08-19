@@ -111,7 +111,9 @@ def node_to_mql5(node: ExpressionNode) -> str:
     elif tok in ("mul", "safe_mul") and len(args) == 2:
         return f"({args[0]} * {args[1]})"
     elif tok in ("div", "safe_div") and len(args) == 2:
-        return f"({args[1]} != 0.0 ? ({args[0]} / {args[1]}) : 0.0)"
+        # Parity with Python's safe_div (primitives.py): denominator below
+        # 1e-6 in magnitude returns 1.0, NOT 0.0.
+        return f"(MathAbs({args[1]}) > 1e-6 ? ({args[0]} / {args[1]}) : 1.0)"
     elif tok == "neg" and len(args) == 1:
         return f"(-{args[0]})"
     elif tok == "abs_diff" and len(args) == 2:
@@ -121,7 +123,7 @@ def node_to_mql5(node: ExpressionNode) -> str:
     elif tok == "min_op" and len(args) == 2:
         return f"MathMin({args[0]}, {args[1]})"
 
-    # Relational & Crossover (Always return 1.0 for true, 0.0 for false)
+    # Relational (Always return 1.0 for true, 0.0 for false)
     elif tok == "gt" and len(args) == 2:
         return f"({args[0]} > {args[1]} ? 1.0 : 0.0)"
     elif tok == "lt" and len(args) == 2:
@@ -132,10 +134,19 @@ def node_to_mql5(node: ExpressionNode) -> str:
         return f"({args[0]} <= {args[1]} ? 1.0 : 0.0)"
     elif tok == "eq" and len(args) == 2:
         return f"({args[0]} == {args[1]} ? 1.0 : 0.0)"
+
+    # Crossovers: true ONLY on the crossing bar, matching Python's
+    # cross_above/cross_below (primitives.py) which compare the current
+    # element with the previous one (np.roll). The current value is read
+    # from bar [1] (last closed), so the previous value comes from bar [2].
     elif tok in ("crossover", "cross_above") and len(args) == 2:
-        return f"({args[0]} > {args[1]} ? 1.0 : 0.0)"
+        prev0 = args[0].replace("[1]", "[2]")
+        prev1 = args[1].replace("[1]", "[2]")
+        return f"({args[0]} > {args[1]} && {prev0} <= {prev1} ? 1.0 : 0.0)"
     elif tok in ("crossunder", "cross_below") and len(args) == 2:
-        return f"({args[0]} < {args[1]} ? 1.0 : 0.0)"
+        prev0 = args[0].replace("[1]", "[2]")
+        prev1 = args[1].replace("[1]", "[2]")
+        return f"({args[0]} < {args[1]} && {prev0} >= {prev1} ? 1.0 : 0.0)"
 
     # Logical
     elif tok == "and_op" and len(args) == 2:
@@ -173,7 +184,7 @@ def node_to_pine(node: ExpressionNode) -> str:
     elif tok in ("mul", "safe_mul") and len(args) == 2:
         return f"({args[0]} * {args[1]})"
     elif tok in ("div", "safe_div") and len(args) == 2:
-        return f"({args[1]} != 0 ? ({args[0]} / {args[1]}) : 0)"
+        return f"(math.abs({args[1]}) > 1e-6 ? ({args[0]} / {args[1]}) : 1.0)"
     elif tok == "neg" and len(args) == 1:
         return f"(-{args[0]})"
     elif tok == "abs_diff" and len(args) == 2:

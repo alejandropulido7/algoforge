@@ -8,7 +8,16 @@ def evaluate_strategy_signals(
     n_bars: int,
     direction: str = "both"
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Execute compiled GP function with indicator arrays to generate directional entry/exit boolean arrays."""
+    """Execute compiled GP function to generate buy/sell signal boolean arrays.
+
+    Returns (entries, exits) in the simulator/EA convention:
+      entries = (signal > 0.0)  -> long entry / short exit candidates
+      exits   = (signal <= 0.0) -> short entry / long exit candidates
+
+    The trade direction restriction is applied INSIDE the simulator / EA from
+    risk_config (previously the "short" branch inverted the signals here,
+    making the Python simulator trade the opposite side of the EA).
+    """
     try:
         raw_output = func(*indicator_arrays)
         if isinstance(raw_output, (int, float)):
@@ -19,14 +28,8 @@ def evaluate_strategy_signals(
         if len(raw_output) != n_bars:
             raw_output = np.resize(raw_output, n_bars)
 
-        if direction == "short":
-            # Short only: enter when negative signal, exit when signal is positive/zero
-            entries = (raw_output < 0.0)
-            exits = (raw_output >= 0.0)
-        else:
-            # Long only or both: enter when positive signal, exit when signal is negative/zero
-            entries = (raw_output > 0.0)
-            exits = (raw_output <= 0.0)
+        entries = (raw_output > 0.0)
+        exits = (raw_output <= 0.0)
 
         return entries, exits
     except Exception:
@@ -37,19 +40,19 @@ def evaluate_fitness(
     indicator_arrays: list[np.ndarray], 
     df: pd.DataFrame,
     risk_config: dict | None = None,
-    tree_len: int = 5
+    tree_len: int = 5,
+    atr_array: np.ndarray | None = None
 ) -> tuple[float, BacktestResult | None]:
     """Backtest a compiled GP strategy and return fitness with parsimony and trade frequency regularization."""
     n_bars = len(df)
-    direction = (risk_config or {}).get("direction", "both")
-    entries, exits = evaluate_strategy_signals(func, indicator_arrays, n_bars, direction=direction)
-    
+    entries, exits = evaluate_strategy_signals(func, indicator_arrays, n_bars)
+
     if np.sum(entries) == 0:
         return (-10.0, None)
 
     engine = VectorBTEngine(risk_config)
     try:
-        res = engine.backtest(df, entries, exits)
+        res = engine.backtest(df, entries, exits, atr_array=atr_array)
         sharpe = res.sharpe_ratio if not np.isnan(res.sharpe_ratio) else -5.0
         score = float(sharpe)
 
