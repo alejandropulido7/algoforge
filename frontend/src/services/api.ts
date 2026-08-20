@@ -130,6 +130,13 @@ export const deleteJob = async (id: string): Promise<void> => {
   if (!response.ok) throw new Error('Failed to delete job');
 };
 
+export const cancelJob = async (id: string): Promise<{ status: string; job_id: string }> => {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/jobs/${id}/cancel`, { method: 'POST', headers });
+  if (!response.ok) throw new Error('Failed to cancel job');
+  return response.json();
+};
+
 export const getStrategies = async (jobId: string): Promise<Strategy[]> => {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_URL}/strategies?job_id=${jobId}`, { headers });

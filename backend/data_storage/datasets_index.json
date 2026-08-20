@@ -1,5 +1,29 @@
 [
   {
+    "id": "dukascopy_xauusd_1h",
+    "symbol": "XAUUSD",
+    "name": "XAUUSD (1h) [Dukascopy]",
+    "timeframe": "1h",
+    "start_date": "2023-01-02",
+    "end_date": "2026-08-14",
+    "row_count": 21389,
+    "source": "dukascopy",
+    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/dukascopy_xauusd_1h.csv",
+    "created_at": "2026-08-19T10:23:53.820796"
+  },
+  {
+    "id": "dukascopy_eurusd_1h",
+    "symbol": "EURUSD",
+    "name": "EURUSD (1h) [Dukascopy]",
+    "timeframe": "1h",
+    "start_date": "2023-01-01",
+    "end_date": "2026-08-18",
+    "row_count": 22596,
+    "source": "dukascopy",
+    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/dukascopy_eurusd_1h.csv",
+    "created_at": "2026-08-18T22:36:09.321174"
+  },
+  {
     "id": "mt5_csv_ustec_1m",
     "symbol": "USTEC",
     "name": "USTEC (1m) - USTEC_M15_202501020100_202608171545.csv",
@@ -46,18 +70,6 @@
     "source": "dukascopy",
     "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/dukascopy_eurusd_15m.csv",
     "created_at": "2026-08-17T19:24:36.185464"
-  },
-  {
-    "id": "dukascopy_xauusd_1h",
-    "symbol": "XAUUSD",
-    "name": "XAUUSD (1h) [Dukascopy]",
-    "timeframe": "1h",
-    "start_date": "2026-08-14",
-    "end_date": "2026-08-17",
-    "row_count": 24,
-    "source": "dukascopy",
-    "filepath": "/Users/alejandropulido/Documents/software-projects/trading/algoforge/backend/data_storage/dukascopy_xauusd_1h.csv",
-    "created_at": "2026-08-17T19:24:07.869620"
   },
   {
     "id": "yfinance_btc_usd_1h",

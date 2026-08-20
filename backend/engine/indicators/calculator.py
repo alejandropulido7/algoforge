@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from .registry import INDICATOR_REGISTRY, get_indicator
+from .registry import INDICATOR_REGISTRY, get_indicator, normalize_indicator_params
 
 class IndicatorCalculator:
     """Calculates 40+ technical indicators on standard OHLCV DataFrames using the 'ta' package."""
@@ -37,7 +37,7 @@ class IndicatorCalculator:
         func_name = ind_cfg.func_name if ind_cfg else indicator_name.lower().replace(" ", "").replace("%", "")
         effective_params = dict(ind_cfg.default_params) if ind_cfg else {}
         if params:
-            effective_params.update(params)
+            effective_params.update(normalize_indicator_params(indicator_name, params))
 
         close = df_norm['Close']
         high = df_norm['High']
@@ -53,6 +53,11 @@ class IndicatorCalculator:
 
         try:
             # === 1. MOMENTUM ===
+            # Oscillators are computed with the ta library (parity with the
+            # exported MT5 math). The oversold/overbought levels are declared
+            # in the registry (default_params) so they get logged, stored in
+            # the indicator_config and shown in the strategy results; ta
+            # computes the series itself, the thresholds are signal levels.
             if func_name == 'rsi':
                 w = int(effective_params.get('window', 14))
                 from ta.momentum import RSIIndicator
@@ -309,9 +314,11 @@ class IndicatorCalculator:
         for item in selected_indicators:
             if isinstance(item, str):
                 name = item
+                var_name = item
                 params = {}
             elif isinstance(item, dict):
                 name = item.get("name", "")
+                var_name = item.get("var_name", name)
                 params = item.get("params", {})
             else:
                 continue
@@ -324,9 +331,9 @@ class IndicatorCalculator:
                     # bfill(), which used FUTURE data (lookahead bias) to fabricate
                     # indicator values at the start of the dataset.
                     arr = val.fillna(0).to_numpy()
-                    results[name] = np.nan_to_num(arr)
+                    results[var_name] = np.nan_to_num(arr)
                 elif isinstance(val, np.ndarray):
-                    results[name] = np.nan_to_num(val)
+                    results[var_name] = np.nan_to_num(val)
         return results
 
 calculate_single = IndicatorCalculator.calculate_single

@@ -56,12 +56,26 @@ def get_strategy_by_id(strategy_id: str) -> dict:
             if job_record and "config" in job_record:
                 job_cfg = job_record.get("config", {})
 
-                # 1. Enrich risk_config
+                # 1. Enrich risk_config. PRIORITY: the risk_config that was
+                # actually applied during the backtest (stored in
+                # exit_rules.risk_config by the pipeline) over the raw job
+                # risk, so TP/SL Management (e.g. ATR Clásico) is reflected in
+                # the strategy results instead of the un-sampled job defaults.
+                applied_risk = {}
+                er_risk = strat.get("exit_rules", {}).get("risk_config") if isinstance(strat.get("exit_rules"), dict) else None
+                if isinstance(er_risk, dict):
+                    applied_risk = er_risk
                 if not strat.get("risk_config") or strat.get("risk_config") == {}:
-                    if "risk" in job_cfg and job_cfg["risk"]:
+                    if applied_risk:
+                        strat["risk_config"] = applied_risk
+                    elif "risk" in job_cfg and job_cfg["risk"]:
                         strat["risk_config"] = job_cfg["risk"]
-                    elif "risk_config" in strat.get("exit_rules", {}):
-                        strat["risk_config"] = strat["exit_rules"]["risk_config"]
+                elif applied_risk and not strat.get("risk_config", {}).get("slType"):
+                    # Strategy record has some risk but the applied one carries
+                    # the effective SL/TP mode -> surface it.
+                    merged = dict(strat["risk_config"])
+                    merged.update({k: v for k, v in applied_risk.items() if v is not None})
+                    strat["risk_config"] = merged
 
                 # 2. Enrich indicator_config / indicatorParams
                 if not strat.get("indicator_config") or strat.get("indicator_config") == {}:

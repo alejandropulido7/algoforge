@@ -25,24 +25,24 @@ INDICATOR_REGISTRY: dict[str, IndicatorConfig] = {
         name="RSI",
         category=IndicatorCategory.MOMENTUM,
         func_name="rsi",
-        default_params={"window": 14},
-        param_ranges={"window": (5, 50)},
+        default_params={"window": 14, "oversold": 30.0, "overbought": 70.0},
+        param_ranges={"window": (5, 50), "oversold": (10, 40), "overbought": (60, 90)},
         description="Relative Strength Index (RSI)"
     ),
     "STOCHASTIC": IndicatorConfig(
         name="Stochastic",
         category=IndicatorCategory.MOMENTUM,
         func_name="stoch",
-        default_params={"window": 14, "smooth_window": 3},
-        param_ranges={"window": (5, 30), "smooth_window": (2, 10)},
+        default_params={"window": 14, "smooth_window": 3, "oversold": 20.0, "overbought": 80.0},
+        param_ranges={"window": (5, 30), "smooth_window": (2, 10), "oversold": (10, 30), "overbought": (70, 90)},
         description="Stochastic Oscillator (%K)"
     ),
     "STOCHRSI": IndicatorConfig(
         name="StochRSI",
         category=IndicatorCategory.MOMENTUM,
         func_name="stochrsi",
-        default_params={"window": 14, "smooth1": 3, "smooth2": 3},
-        param_ranges={"window": (5, 30), "smooth1": (2, 10), "smooth2": (2, 10)},
+        default_params={"window": 14, "smooth1": 3, "smooth2": 3, "oversold": 20.0, "overbought": 80.0},
+        param_ranges={"window": (5, 30), "smooth1": (2, 10), "smooth2": (2, 10), "oversold": (10, 30), "overbought": (70, 90)},
         description="Stochastic RSI"
     ),
     "TSI": IndicatorConfig(
@@ -65,8 +65,8 @@ INDICATOR_REGISTRY: dict[str, IndicatorConfig] = {
         name="Williams %R",
         category=IndicatorCategory.MOMENTUM,
         func_name="willr",
-        default_params={"lbp": 14},
-        param_ranges={"lbp": (5, 30)},
+        default_params={"lbp": 14, "oversold": -80.0, "overbought": -20.0},
+        param_ranges={"lbp": (5, 30), "oversold": (-90, -70), "overbought": (-30, -10)},
         description="Williams Percent Range"
     ),
     "AWESOME OSCILLATOR": IndicatorConfig(
@@ -171,8 +171,8 @@ INDICATOR_REGISTRY: dict[str, IndicatorConfig] = {
         name="CCI",
         category=IndicatorCategory.TREND,
         func_name="cci",
-        default_params={"window": 20},
-        param_ranges={"window": (10, 50)},
+        default_params={"window": 20, "oversold": -100.0, "overbought": 100.0},
+        param_ranges={"window": (10, 50), "oversold": (-200, -50), "overbought": (50, 200)},
         description="Commodity Channel Index"
     ),
     "PSAR": IndicatorConfig(
@@ -303,8 +303,8 @@ INDICATOR_REGISTRY: dict[str, IndicatorConfig] = {
         name="MFI",
         category=IndicatorCategory.VOLUME,
         func_name="mfi",
-        default_params={"window": 14},
-        param_ranges={"window": (7, 30)},
+        default_params={"window": 14, "oversold": 20.0, "overbought": 80.0},
+        param_ranges={"window": (7, 30), "oversold": (10, 30), "overbought": (70, 90)},
         description="Money Flow Index"
     ),
     "ADI": IndicatorConfig(
@@ -382,6 +382,40 @@ INDICATOR_REGISTRY: dict[str, IndicatorConfig] = {
         description="Cumulative Return Percentage"
     ),
 }
+
+# Frontend/catalog param keys -> canonical ta/registry keys. The configurator
+# exposes ranges as "period", "deviation", "fast", "slow", ... but the
+# calculator and exporters read "window", "window_dev", "window_fast", ...
+# Without this mapping the user's configured ranges were silently ignored and
+# every indicator ran with its defaults.
+PARAM_ALIASES = {
+    "period": "window",
+    "length": "window",
+    "deviation": "window_dev",
+    "std": "window_dev",
+    "fast": "window_fast",
+    "slow": "window_slow",
+    "signal": "window_sign",
+    "smooth": "smooth_window",
+    "smooth1": "smooth1",
+    "smooth2": "smooth2",
+    "lbp": "lbp",
+}
+
+def normalize_indicator_params(indicator_name: str, params: dict | None) -> dict:
+    """Map user/frontend param keys to the canonical keys the calculator uses."""
+    params = dict(params or {})
+    if not params:
+        return params
+    cfg = get_indicator(indicator_name)
+    canonical_keys: set[str] = set()
+    if cfg:
+        canonical_keys = set(cfg.default_params.keys()) | set(cfg.param_ranges.keys())
+    out = {}
+    for k, v in params.items():
+        key = PARAM_ALIASES.get(k, k)
+        out[key] = v
+    return out
 
 def normalize_key(name: str) -> str:
     return re.sub(r"[\s_\-%]", "", str(name)).upper()

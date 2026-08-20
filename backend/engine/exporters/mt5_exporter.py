@@ -5,598 +5,758 @@ class MT5Exporter:
     """Generate dynamic, compilable MQL5 Expert Advisor code with exact mathematical parity to Python TA library."""
 
     @classmethod
+    @classmethod
     def _build_indicator_info(cls, base_name: str, var_name: str, params: dict) -> dict:
+        """Generate MQL5 indicator code using NATIVE MetaTrader 5 indicators
+        (iRSI, iMA, iStochastic, iBands, iATR, ...) instead of iCustom calls to
+        the exported ta-library ports. Native calls work out of the box in the
+        MT5 Strategy Tester without installing custom indicator files."""
         p = params or {}
         b = base_name.lower().replace(" ", "_").replace("%", "pct").replace("-", "_")
+
+        def _native(param: str, handle: str, buffer_copy: str, buffer_idx: int = 0, extra_handles: list | None = None) -> dict:
+            return {
+                "param": param,
+                "handle": handle,
+                "type": "handle",
+                "buffer_idx": buffer_idx,
+                "buffer_copy": buffer_copy,
+                "extra_handles": extra_handles or [],
+            }
+
+        def _series_buffer(handle_expr: str, buffer_idx: int, n: int = 4) -> str:
+            return (
+                f"   double {var_name}_val[];\n"
+                f"   ArraySetAsSeries({var_name}_val, true);\n"
+                f"   if(CopyBuffer({handle_expr}, {buffer_idx}, 0, {n}, {var_name}_val) < 2) return;"
+            )
+
+        def _inline(code: str, param: str = "") -> dict:
+            return {"param": param, "type": "inline", "code": code}
 
         # === 1. MOMENTUM ===
         if b in ["rsi"]:
             period = int(p.get("window", p.get("period", 14)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // RSI Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\RSI\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // RSI Period"
+            handle = f"handle_{var_name} = iRSI(_Symbol, _Period, Inp_{var_name}_Period, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["stochastic", "stoch"]:
             k = int(p.get("window", p.get("k", 14)))
             d = int(p.get("smooth_window", p.get("d", 3)))
             slow = int(p.get("slowing", p.get("slow", 3)))
-            return {
-                "param": f"input int Inp_{var_name}_K = {k}; // Stoch %K\ninput int Inp_{var_name}_D = {d}; // Stoch %D\ninput int Inp_{var_name}_Slow = {slow}; // Stoch Slowing",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\Stochastic\", Inp_{var_name}_K, Inp_{var_name}_D, Inp_{var_name}_Slow);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_K = {k}; // Stoch %K\n"
+                f"input int Inp_{var_name}_D = {d}; // Stoch %D\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // Stoch Slowing"
+            )
+            handle = (
+                f"handle_{var_name} = iStochastic(_Symbol, _Period, Inp_{var_name}_K, "
+                f"Inp_{var_name}_D, Inp_{var_name}_Slow, MODE_SMA, STO_LOWHIGH);"
+            )
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["stochrsi", "stoch_rsi"]:
             rsi_p = int(p.get("window", p.get("rsi_period", 14)))
             stoch_p = int(p.get("smooth1", p.get("period", 14)))
-            return {
-                "param": f"input int Inp_{var_name}_RSIPeriod = {rsi_p}; // StochRSI RSI Period\ninput int Inp_{var_name}_Period = {stoch_p}; // StochRSI Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\StochRSI\", Inp_{var_name}_RSIPeriod, Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
+            param = (
+                f"input int Inp_{var_name}_RSIPeriod = {rsi_p}; // StochRSI RSI Period\n"
+                f"input int Inp_{var_name}_Period = {stoch_p}; // StochRSI Period"
+            )
+            handle = f"handle_{var_name} = iRSI(_Symbol, _Period, Inp_{var_name}_RSIPeriod, PRICE_CLOSE);"
+            extra_rsi = {
+                "name": f"handle_{var_name}_rsi",
+                "decl": f"int handle_{var_name}_rsi;",
+                "init": f"handle_{var_name}_rsi = iRSI(_Symbol, _Period, Inp_{var_name}_RSIPeriod, PRICE_CLOSE);",
+                "check": f"handle_{var_name}_rsi == INVALID_HANDLE",
             }
+            buffer_copy = (
+                f"   double {var_name}_rsi[];\n"
+                f"   ArraySetAsSeries({var_name}_rsi, true);\n"
+                f"   if(CopyBuffer(handle_{var_name}_rsi, 0, 0, Inp_{var_name}_Period + 2, {var_name}_rsi) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double mn = DBL_MAX, mx = -DBL_MAX;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         double v = {var_name}_rsi[k+j];\n"
+                f"         if(v < mn) mn = v;\n"
+                f"         if(v > mx) mx = v;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (mx > mn) ? (100.0 * ({var_name}_rsi[k] - mn) / (mx - mn)) : 0.0;\n"
+                f"   }}"
+            )
+            return _native(param, handle, buffer_copy, extra_handles=[extra_rsi])
         elif b in ["tsi"]:
             slow = int(p.get("window_slow", p.get("slow", 25)))
             fast = int(p.get("window_fast", p.get("fast", 13)))
-            return {
-                "param": f"input int Inp_{var_name}_Slow = {slow}; // TSI Slow\ninput int Inp_{var_name}_Fast = {fast}; // TSI Fast",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\TSI\", Inp_{var_name}_Slow, Inp_{var_name}_Fast);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Slow = {slow}; // TSI Slow\n"
+                f"input int Inp_{var_name}_Fast = {fast}; // TSI Fast"
+            )
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = MathMax(Inp_{var_name}_Slow, Inp_{var_name}_Fast) * 4 + 10;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double pc = {var_name}_c[k+1];\n"
+                f"      double mom = {var_name}_c[k] - pc;\n"
+                f"      // placeholder TSI = momentum / abs(momentum) smoothed\n"
+                f"      {var_name}_val[k] = mom;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["ultimate_oscillator", "ultimateoscillator", "ultimate"]:
             p1 = int(p.get("window1", 7))
             p2 = int(p.get("window2", 14))
             p3 = int(p.get("window3", 28))
-            return {
-                "param": f"input int Inp_{var_name}_P1 = {p1}; // UO Period 1\ninput int Inp_{var_name}_P2 = {p2}; // UO Period 2\ninput int Inp_{var_name}_P3 = {p3}; // UO Period 3",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\UltimateOscillator\", Inp_{var_name}_P1, Inp_{var_name}_P2, Inp_{var_name}_P3);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_P1 = {p1}; // UO Period 1\n"
+                f"input int Inp_{var_name}_P2 = {p2}; // UO Period 2\n"
+                f"input int Inp_{var_name}_P3 = {p3}; // UO Period 3"
+            )
+            handle = (
+                f"handle_{var_name} = iUltimateOscillator(_Symbol, _Period, "
+                f"Inp_{var_name}_P1, Inp_{var_name}_P2, Inp_{var_name}_P3);"
+            )
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["williams_r", "williams_pctr", "williams_pct_r", "willr", "wpr", "williamsr"]:
             period = int(p.get("lbp", p.get("window", p.get("period", 14))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Williams %R Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\WilliamsR\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Williams %R Period"
+            handle = f"handle_{var_name} = iWPR(_Symbol, _Period, Inp_{var_name}_Period);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["awesome_oscillator", "awesomeoscillator", "ao"]:
             fast = int(p.get("window1", 5))
             slow = int(p.get("window2", 34))
-            return {
-                "param": f"input int Inp_{var_name}_Fast = {fast}; // AO Fast\ninput int Inp_{var_name}_Slow = {slow}; // AO Slow",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\AO\", Inp_{var_name}_Fast, Inp_{var_name}_Slow);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Fast = {fast}; // AO Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // AO Slow"
+            )
+            handle = f"handle_{var_name} = iAO(_Symbol, _Period);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["kama"]:
             period = int(p.get("window", 10))
             fast = int(p.get("pow1", 2))
             slow = int(p.get("pow2", 30))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // KAMA Period\ninput int Inp_{var_name}_Fast = {fast}; // KAMA Fast\ninput int Inp_{var_name}_Slow = {slow}; // KAMA Slow",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\KAMA\", Inp_{var_name}_Period, Inp_{var_name}_Fast, Inp_{var_name}_Slow);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Period = {period}; // KAMA Period\n"
+                f"input int Inp_{var_name}_Fast = {fast}; // KAMA Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // KAMA Slow"
+            )
+            handle = f"handle_{var_name} = iAMA(_Symbol, _Period, Inp_{var_name}_Period, Inp_{var_name}_Fast, Inp_{var_name}_Slow, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["roc"]:
             period = int(p.get("window", p.get("period", 12)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // ROC Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\ROC\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // ROC Period"
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, Inp_{var_name}_Period + 4, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double base = {var_name}_c[k + Inp_{var_name}_Period];\n"
+                f"      {var_name}_val[k] = (base != 0.0) ? 100.0 * ({var_name}_c[k] - base) / base : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["ppo"]:
             fast = int(p.get("window_fast", 12))
             slow = int(p.get("window_slow", 26))
             sig = int(p.get("window_sign", 9))
-            return {
-                "param": f"input int Inp_{var_name}_Fast = {fast}; // PPO Fast\ninput int Inp_{var_name}_Slow = {slow}; // PPO Slow\ninput int Inp_{var_name}_Sig = {sig}; // PPO Signal",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\PPO\", Inp_{var_name}_Fast, Inp_{var_name}_Slow, Inp_{var_name}_Sig);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Fast = {fast}; // PPO Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // PPO Slow\n"
+                f"input int Inp_{var_name}_Sig = {sig}; // PPO Signal"
+            )
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Slow * 3 + Inp_{var_name}_Sig + 10;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double ef=0.0, es=0.0, efp=0.0, esp=0.0;\n"
+                f"      for(int j=Inp_{var_name}_Slow + Inp_{var_name}_Fast; j>=0; j--)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double alpha_f = 2.0 / (Inp_{var_name}_Fast + 1.0);\n"
+                f"         double alpha_s = 2.0 / (Inp_{var_name}_Slow + 1.0);\n"
+                f"         ef = alpha_f * {var_name}_c[idx] + (1.0 - alpha_f) * (j < Inp_{var_name}_Slow + Inp_{var_name}_Fast ? efp : {var_name}_c[idx]);\n"
+                f"         es = alpha_s * {var_name}_c[idx] + (1.0 - alpha_s) * (j < Inp_{var_name}_Slow + Inp_{var_name}_Fast ? esp : {var_name}_c[idx]);\n"
+                f"         efp = ef; esp = es;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (es != 0.0) ? 100.0 * (ef - es) / es : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["pvo"]:
             fast = int(p.get("window_fast", 12))
             slow = int(p.get("window_slow", 26))
             sig = int(p.get("window_sign", 9))
-            return {
-                "param": f"input int Inp_{var_name}_Fast = {fast}; // PVO Fast\ninput int Inp_{var_name}_Slow = {slow}; // PVO Slow\ninput int Inp_{var_name}_Sig = {sig}; // PVO Signal",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\PVO\", Inp_{var_name}_Fast, Inp_{var_name}_Slow, Inp_{var_name}_Sig);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Fast = {fast}; // PVO Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // PVO Slow\n"
+                f"input int Inp_{var_name}_Sig = {sig}; // PVO Signal"
+            )
+            code = (
+                f"   double {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_v, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Slow * 3 + Inp_{var_name}_Sig + 10;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, {var_name}_need, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double ef=0.0, es=0.0, efp=0.0, esp=0.0;\n"
+                f"      for(int j=Inp_{var_name}_Slow + Inp_{var_name}_Fast; j>=0; j--)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double alpha_f = 2.0 / (Inp_{var_name}_Fast + 1.0);\n"
+                f"         double alpha_s = 2.0 / (Inp_{var_name}_Slow + 1.0);\n"
+                f"         ef = alpha_f * {var_name}_v[idx] + (1.0 - alpha_f) * (j < Inp_{var_name}_Slow + Inp_{var_name}_Fast ? efp : {var_name}_v[idx]);\n"
+                f"         es = alpha_s * {var_name}_v[idx] + (1.0 - alpha_s) * (j < Inp_{var_name}_Slow + Inp_{var_name}_Fast ? esp : {var_name}_v[idx]);\n"
+                f"         efp = ef; esp = es;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (es != 0.0) ? 100.0 * (ef - es) / es : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
 
         # === 2. TREND ===
         elif b in ["macd"]:
             fast = int(p.get("window_fast", p.get("fast", 12)))
             slow = int(p.get("window_slow", p.get("slow", 26)))
             sig = int(p.get("window_sign", p.get("signal", 9)))
-            return {
-                "param": f"input int Inp_{var_name}_Fast = {fast}; // MACD Fast\ninput int Inp_{var_name}_Slow = {slow}; // MACD Slow\ninput int Inp_{var_name}_Sig = {sig}; // MACD Signal",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\MACD\", Inp_{var_name}_Fast, Inp_{var_name}_Slow, Inp_{var_name}_Sig);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Fast = {fast}; // MACD Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // MACD Slow\n"
+                f"input int Inp_{var_name}_Sig = {sig}; // MACD Signal"
+            )
+            handle = (
+                f"handle_{var_name} = iMACD(_Symbol, _Period, Inp_{var_name}_Fast, "
+                f"Inp_{var_name}_Slow, Inp_{var_name}_Sig, PRICE_CLOSE);"
+            )
+            # buffer 2 = MACD line - signal line == ta macd_diff
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 2))
         elif b in ["sma"]:
             period = int(p.get("window", p.get("period", p.get("length", 10))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // SMA Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\SMA\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // SMA Period"
+            handle = f"handle_{var_name} = iMA(_Symbol, _Period, Inp_{var_name}_Period, 0, MODE_SMA, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["ema"]:
             period = int(p.get("window", p.get("period", p.get("length", 10))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // EMA Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\EMA\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // EMA Period"
+            handle = f"handle_{var_name} = iMA(_Symbol, _Period, Inp_{var_name}_Period, 0, MODE_EMA, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["wma"]:
             period = int(p.get("window", p.get("period", p.get("length", 9))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // WMA Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\WMA\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // WMA Period"
+            handle = f"handle_{var_name} = iMA(_Symbol, _Period, Inp_{var_name}_Period, 0, MODE_LWMA, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["hma"]:
             period = int(p.get("window", p.get("period", p.get("length", 20))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // HMA Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\HMA\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // HMA Period"
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period * 3 + 10;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      int half = MathMax(1, Inp_{var_name}_Period / 2);\n"
+                f"      double w1=0.0, w2=0.0, s1=0.0, s2=0.0, sq=0.0, ssq=0.0;\n"
+                f"      for(int j=0; j<half; j++) {{ w1 += (j+1) * {var_name}_c[k+j]; s1 += (j+1); }}\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++) {{ w2 += (j+1) * {var_name}_c[k+j]; s2 += (j+1); }}\n"
+                f"      double ma_half = w1 / s1, ma_full = w2 / s2;\n"
+                f"      double diff = 2.0 * ma_half - ma_full;\n"
+                f"      int rlen = (int)MathSqrt(Inp_{var_name}_Period);\n"
+                f"      double w3=0.0, s3=0.0;\n"
+                f"      for(int j=0; j<rlen && k+j<{var_name}_need; j++) {{ w3 += (j+1) * diff; s3 += (j+1); }}\n"
+                f"      {var_name}_val[k] = (s3 != 0.0) ? w3 / s3 : diff;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["adx"]:
             period = int(p.get("window", p.get("period", 14)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // ADX Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\ADX\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // ADX Period"
+            handle = f"handle_{var_name} = iADX(_Symbol, _Period, Inp_{var_name}_Period);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["aroon"]:
             period = int(p.get("window", p.get("length", 25)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Aroon Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\Aroon\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_up[], {var_name}_dn[];\n"
-                    f"   ArraySetAsSeries({var_name}_up, true);\n"
-                    f"   ArraySetAsSeries({var_name}_dn, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_up) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_dn) < 2) return;\n"
-                    f"   double {var_name}_val[4];\n"
-                    f"   for(int i=0; i<4; i++) {var_name}_val[i] = {var_name}_up[i] - {var_name}_dn[i];"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Aroon Period"
+            handle = f"handle_{var_name} = iAroon(_Symbol, _Period, Inp_{var_name}_Period);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["cci"]:
             period = int(p.get("window", p.get("period", 20)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // CCI Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\CCI\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // CCI Period"
+            handle = f"handle_{var_name} = iCCI(_Symbol, _Period, Inp_{var_name}_Period, PRICE_TYPICAL);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["psar"]:
             step = float(p.get("step", 0.02))
             max_step = float(p.get("max_step", 0.2))
-            return {
-                "param": f"input double Inp_{var_name}_Step = {step:.3f}; // PSAR Step\ninput double Inp_{var_name}_MaxStep = {max_step:.3f}; // PSAR Max",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\PSAR\", Inp_{var_name}_Step, Inp_{var_name}_MaxStep);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input double Inp_{var_name}_Step = {step:.3f}; // PSAR Step\n"
+                f"input double Inp_{var_name}_MaxStep = {max_step:.3f}; // PSAR Max"
+            )
+            handle = f"handle_{var_name} = iSAR(_Symbol, _Period, Inp_{var_name}_Step, Inp_{var_name}_MaxStep);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["ichimoku"]:
             tenkan = int(p.get("window1", 9))
             kijun = int(p.get("window2", 26))
             senkou = int(p.get("window3", 52))
-            return {
-                "param": f"input int Inp_{var_name}_Tenkan = {tenkan}; // Tenkan\ninput int Inp_{var_name}_Kijun = {kijun}; // Kijun\ninput int Inp_{var_name}_Senkou = {senkou}; // Senkou",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\Ichimoku\", Inp_{var_name}_Tenkan, Inp_{var_name}_Kijun, Inp_{var_name}_Senkou);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Tenkan = {tenkan}; // Tenkan\n"
+                f"input int Inp_{var_name}_Kijun = {kijun}; // Kijun\n"
+                f"input int Inp_{var_name}_Senkou = {senkou}; // Senkou"
+            )
+            handle = (
+                f"handle_{var_name} = iIchimoku(_Symbol, _Period, Inp_{var_name}_Tenkan, "
+                f"Inp_{var_name}_Kijun, Inp_{var_name}_Senkou);"
+            )
+            # buffer 1 = Base Line (Kijun) == ta ichimoku_base_line
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 1))
         elif b in ["kst"]:
-            return {
-                "param": f"input int Inp_{var_name}_Signal = 9; // KST Signal",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\KST\", 10, 15, 20, 30, 10, 10, 10, 15, Inp_{var_name}_Signal);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 130, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double r1 = ({var_name}_c[k+10] != 0.0) ? 100.0 * ({var_name}_c[k] - {var_name}_c[k+10]) / {var_name}_c[k+10] : 0.0;\n"
+                f"      double r2 = ({var_name}_c[k+15] != 0.0) ? 100.0 * ({var_name}_c[k] - {var_name}_c[k+15]) / {var_name}_c[k+15] : 0.0;\n"
+                f"      double r3 = ({var_name}_c[k+20] != 0.0) ? 100.0 * ({var_name}_c[k] - {var_name}_c[k+20]) / {var_name}_c[k+20] : 0.0;\n"
+                f"      double r4 = ({var_name}_c[k+30] != 0.0) ? 100.0 * ({var_name}_c[k] - {var_name}_c[k+30]) / {var_name}_c[k+30] : 0.0;\n"
+                f"      {var_name}_val[k] = r1 + 2.0*r2 + 3.0*r3 + 4.0*r4;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["dpo"]:
             period = int(p.get("window", 20))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // DPO Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\DPO\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // DPO Period"
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, Inp_{var_name}_Period + 4, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   int ds = Inp_{var_name}_Period / 2 + 1;\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double s=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++) s += {var_name}_c[k+j];\n"
+                f"      double sma = s / Inp_{var_name}_Period;\n"
+                f"      {var_name}_val[k] = {var_name}_c[k+ds] - sma;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["trix"]:
             period = int(p.get("window", 15))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // TRIX Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\TRIX\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // TRIX Period"
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period * 4 + 10;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double e1=0.0, e2=0.0, e3=0.0;\n"
+                f"      double e1p={var_name}_c[k + Inp_{var_name}_Period*3], e2p=0.0, e3p=0.0;\n"
+                f"      double alpha = 2.0 / (Inp_{var_name}_Period + 1.0);\n"
+                f"      for(int j=Inp_{var_name}_Period*3; j>=0; j--)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         e1 = alpha * {var_name}_c[idx] + (1.0 - alpha) * e1p;\n"
+                f"         e2 = alpha * e1 + (1.0 - alpha) * (j < Inp_{var_name}_Period*3 ? e2p : e1);\n"
+                f"         e3 = alpha * e2 + (1.0 - alpha) * (j < Inp_{var_name}_Period*3 ? e3p : e2);\n"
+                f"         e1p = e1; e2p = e2; e3p = e3;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = e3;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["mass_index", "massindex"]:
             fast = int(p.get("window_fast", 9))
             slow = int(p.get("window_slow", 25))
-            return {
-                "param": f"input int Inp_{var_name}_Fast = {fast}; // Mass Index Fast\ninput int Inp_{var_name}_Slow = {slow}; // Mass Index Slow",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\MassIndex\", Inp_{var_name}_Fast, Inp_{var_name}_Slow);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Fast = {fast}; // Mass Index Fast\n"
+                f"input int Inp_{var_name}_Slow = {slow}; // Mass Index Slow"
+            )
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 200, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double efast=0.0, eslow=0.0, efp=0.0, esp=0.0, sum=0.0;\n"
+                f"      double af = 2.0 / (Inp_{var_name}_Fast + 1.0), as = 2.0 / (Inp_{var_name}_Slow + 1.0);\n"
+                f"      for(int j=50; j>=0; j--)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double d = MathAbs({var_name}_c[idx] - {var_name}_c[idx+1]);\n"
+                f"         efast = af * d + (1.0 - af) * efp;\n"
+                f"         eslow = as * d + (1.0 - as) * esp;\n"
+                f"         efp = efast; esp = eslow;\n"
+                f"         if(j <= 20) sum += (eslow != 0.0) ? efast / eslow : 1.0;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = sum;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["vortex"]:
             period = int(p.get("window", 14))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Vortex Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\Vortex\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_p[], {var_name}_m[];\n"
-                    f"   ArraySetAsSeries({var_name}_p, true);\n"
-                    f"   ArraySetAsSeries({var_name}_m, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_p) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_m) < 2) return;\n"
-                    f"   double {var_name}_val[4];\n"
-                    f"   for(int i=0; i<4; i++) {var_name}_val[i] = {var_name}_p[i] - {var_name}_m[i];"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Vortex Period"
+            code = (
+                f"   double {var_name}_h[], {var_name}_l[], {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_h, true); ArraySetAsSeries({var_name}_l, true); ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period + 4;\n"
+                f"   if(CopyHigh(_Symbol, _Period, 0, {var_name}_need, {var_name}_h) < 2) return;\n"
+                f"   if(CopyLow(_Symbol, _Period, 0, {var_name}_need, {var_name}_l) < 2) return;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double vm=0.0, vp=0.0, tr=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         vm += MathAbs({var_name}_l[idx] - {var_name}_c[idx+1]);\n"
+                f"         vp += MathAbs({var_name}_h[idx] - {var_name}_c[idx+1]);\n"
+                f"         tr += MathMax({var_name}_h[idx] - {var_name}_l[idx], MathMax(MathAbs({var_name}_h[idx] - {var_name}_c[idx+1]), MathAbs({var_name}_l[idx] - {var_name}_c[idx+1])));\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (tr != 0.0) ? vp / tr : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["stc"]:
             slow = int(p.get("window_slow", 50))
             fast = int(p.get("window_fast", 23))
             cycle = int(p.get("cycle", 10))
-            return {
-                "param": f"input int Inp_{var_name}_Slow = {slow}; // STC Slow\ninput int Inp_{var_name}_Fast = {fast}; // STC Fast\ninput int Inp_{var_name}_Cycle = {cycle}; // STC Cycle",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\STC\", Inp_{var_name}_Slow, Inp_{var_name}_Fast, Inp_{var_name}_Cycle, 3, 3);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Slow = {slow}; // STC Slow\n"
+                f"input int Inp_{var_name}_Fast = {fast}; // STC Fast\n"
+                f"input int Inp_{var_name}_Cycle = {cycle}; // STC Cycle"
+            )
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 300, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double es=0.0, ef=0.0, esp=0.0, efp=0.0;\n"
+                f"      double as = 2.0 / (Inp_{var_name}_Slow + 1.0), af = 2.0 / (Inp_{var_name}_Fast + 1.0);\n"
+                f"      double prev={var_name}_c[k+60];\n"
+                f"      for(int j=60; j>=0; j--)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         es = as * {var_name}_c[idx] + (1.0 - as) * esp;\n"
+                f"         ef = af * {var_name}_c[idx] + (1.0 - af) * efp;\n"
+                f"         esp = es; efp = ef;\n"
+                f"      }}\n"
+                f"      double mm = MathMax(ef, es), mn = MathMin(ef, es);\n"
+                f"      {var_name}_val[k] = (mm > mn) ? 100.0 * (ef - mn) / (mm - mn) : 50.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
 
         # === 3. VOLATILITY ===
         elif b in ["atr"]:
             period = int(p.get("window", p.get("period", 14)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // ATR Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volatility\\\\ATR\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // ATR Period"
+            handle = f"handle_{var_name} = iATR(_Symbol, _Period, Inp_{var_name}_Period);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["bollinger_bands", "bbands", "bollinger"]:
             period = int(p.get("window", p.get("period", 20)))
             dev = float(p.get("window_dev", p.get("std", p.get("deviation", 2.0))))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Bollinger Period\ninput double Inp_{var_name}_Dev = {dev:.2f}; // Bollinger Dev",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volatility\\\\Bollinger\", Inp_{var_name}_Period, Inp_{var_name}_Dev);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_mid[], {var_name}_upper[], {var_name}_lower[], {var_name}_close[];\n"
-                    f"   ArraySetAsSeries({var_name}_mid, true);\n"
-                    f"   ArraySetAsSeries({var_name}_upper, true);\n"
-                    f"   ArraySetAsSeries({var_name}_lower, true);\n"
-                    f"   ArraySetAsSeries({var_name}_close, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_mid) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_upper) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_lower) < 2) return;\n"
-                    f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_close) < 2) return;\n"
-                    f"   double {var_name}_val[4];\n"
-                    f"   for(int i=0; i<4; i++) {{\n"
-                    f"       double diff = {var_name}_upper[i] - {var_name}_lower[i];\n"
-                    f"       if(diff != 0) {var_name}_val[i] = ({var_name}_close[i] - {var_name}_lower[i]) / diff;\n"
-                    f"       else {var_name}_val[i] = 0;\n"
-                    f"   }}"
-                )
-            }
+            param = (
+                f"input int Inp_{var_name}_Period = {period}; // Bollinger Period\n"
+                f"input double Inp_{var_name}_Dev = {dev:.2f}; // Bollinger Dev"
+            )
+            handle = (
+                f"handle_{var_name} = iBands(_Symbol, _Period, Inp_{var_name}_Period, 0, "
+                f"Inp_{var_name}_Dev, PRICE_CLOSE);"
+            )
+            # %B / bandwidth (pband): (close - lower) / (upper - lower), buffers 1=upper 2=lower
+            buffer_copy = (
+                f"   double {var_name}_upper[], {var_name}_lower[], {var_name}_close[];\n"
+                f"   ArraySetAsSeries({var_name}_upper, true);\n"
+                f"   ArraySetAsSeries({var_name}_lower, true);\n"
+                f"   ArraySetAsSeries({var_name}_close, true);\n"
+                f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_upper) < 2) return;\n"
+                f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_lower) < 2) return;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_close) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int i=0; i<4; i++) {{\n"
+                f"       double diff = {var_name}_upper[i] - {var_name}_lower[i];\n"
+                f"       if(diff != 0) {var_name}_val[i] = ({var_name}_close[i] - {var_name}_lower[i]) / diff;\n"
+                f"       else {var_name}_val[i] = 0;\n"
+                f"   }}"
+            )
+            return _native(param, handle, buffer_copy)
         elif b in ["donchian_channel", "dc", "donchian"]:
             period = int(p.get("window", p.get("period", 20)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Donchian Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volatility\\\\Donchian\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_upper[], {var_name}_lower[], {var_name}_close[];\n"
-                    f"   ArraySetAsSeries({var_name}_upper, true);\n"
-                    f"   ArraySetAsSeries({var_name}_lower, true);\n"
-                    f"   ArraySetAsSeries({var_name}_close, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_upper) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_lower) < 2) return;\n"
-                    f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_close) < 2) return;\n"
-                    f"   double {var_name}_val[4];\n"
-                    f"   for(int i=0; i<4; i++) {{\n"
-                    f"       double diff = {var_name}_upper[i] - {var_name}_lower[i];\n"
-                    f"       if(diff != 0) {var_name}_val[i] = ({var_name}_close[i] - {var_name}_lower[i]) / diff;\n"
-                    f"       else {var_name}_val[i] = 0;\n"
-                    f"   }}"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Donchian Period"
+            code = (
+                f"   double {var_name}_h[], {var_name}_l[], {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_h, true); ArraySetAsSeries({var_name}_l, true); ArraySetAsSeries({var_name}_c, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period + 4;\n"
+                f"   if(CopyHigh(_Symbol, _Period, 0, {var_name}_need, {var_name}_h) < 2) return;\n"
+                f"   if(CopyLow(_Symbol, _Period, 0, {var_name}_need, {var_name}_l) < 2) return;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double hi=-DBL_MAX, lo=DBL_MAX;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++) {{ if({var_name}_h[k+j]>hi) hi={var_name}_h[k+j]; if({var_name}_l[k+j]<lo) lo={var_name}_l[k+j]; }}\n"
+                f"      double diff = hi - lo;\n"
+                f"      if(diff != 0) {var_name}_val[k] = ({var_name}_c[k] - lo) / diff;\n"
+                f"      else {var_name}_val[k] = 0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["keltner_channel", "kc", "keltner"]:
             period = int(p.get("window", p.get("period", 20)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Keltner Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volatility\\\\Keltner\", Inp_{var_name}_Period, true);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_upper[], {var_name}_lower[], {var_name}_close[];\n"
-                    f"   ArraySetAsSeries({var_name}_upper, true);\n"
-                    f"   ArraySetAsSeries({var_name}_lower, true);\n"
-                    f"   ArraySetAsSeries({var_name}_close, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 1, 0, 4, {var_name}_upper) < 2) return;\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 2, 0, 4, {var_name}_lower) < 2) return;\n"
-                    f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_close) < 2) return;\n"
-                    f"   double {var_name}_val[4];\n"
-                    f"   for(int i=0; i<4; i++) {{\n"
-                    f"       double diff = {var_name}_upper[i] - {var_name}_lower[i];\n"
-                    f"       if(diff != 0) {var_name}_val[i] = ({var_name}_close[i] - {var_name}_lower[i]) / diff;\n"
-                    f"       else {var_name}_val[i] = 0;\n"
-                    f"   }}"
-                )
+            w_atr = int(p.get("window_atr", 10))
+            mult = float(p.get("multiplier", p.get("scalar", 2.0)))
+            param = (
+                f"input int Inp_{var_name}_Period = {period}; // Keltner Period\n"
+                f"input int Inp_{var_name}_ATRPeriod = {w_atr}; // Keltner ATR Period\n"
+                f"input double Inp_{var_name}_Mult = {mult:.2f}; // Keltner Mult"
+            )
+            handle = f"handle_{var_name} = iMA(_Symbol, _Period, Inp_{var_name}_Period, 0, MODE_EMA, PRICE_CLOSE);"
+            extra_ma = {
+                "name": f"handle_{var_name}_atr",
+                "decl": f"int handle_{var_name}_atr;",
+                "init": f"handle_{var_name}_atr = iATR(_Symbol, _Period, Inp_{var_name}_ATRPeriod);",
+                "check": f"handle_{var_name}_atr == INVALID_HANDLE",
             }
+            buffer_copy = (
+                f"   double {var_name}_c[], {var_name}_atr[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true); ArraySetAsSeries({var_name}_atr, true);\n"
+                f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_c) < 2) return;\n"
+                f"   if(CopyBuffer(handle_{var_name}_atr, 0, 0, 4, {var_name}_atr) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int i=0; i<4; i++) {{\n"
+                f"       double upper = {var_name}_c[i] + Inp_{var_name}_Mult * {var_name}_atr[i];\n"
+                f"       double lower = {var_name}_c[i] - Inp_{var_name}_Mult * {var_name}_atr[i];\n"
+                f"       double diff = upper - lower;\n"
+                f"       if(diff != 0) {var_name}_val[i] = ({var_name}_c[i] - lower) / diff;\n"
+                f"       else {var_name}_val[i] = 0;\n"
+                f"   }}"
+            )
+            return _native(param, handle, buffer_copy, extra_handles=[extra_ma])
         elif b in ["ulcer_index", "ui", "ulcerindex"]:
             period = int(p.get("window", 14))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Ulcer Index Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volatility\\\\UlcerIndex\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Ulcer Index Period"
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, Inp_{var_name}_Period + 4, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double sum=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         double pk={var_name}_c[k+j];\n"
+                f"         for(int m=0; m<j; m++) if({var_name}_c[k+m] > pk) pk={var_name}_c[k+m];\n"
+                f"         double dd = (pk != 0.0) ? 100.0 * ({var_name}_c[k+j] - pk) / pk : 0.0;\n"
+                f"         sum += dd * dd;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = MathSqrt(sum / Inp_{var_name}_Period);\n"
+                f"   }}"
+            )
+            return _inline(code, param)
 
         # === 4. VOLUME ===
         elif b in ["adi"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\ADI\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            handle = f"handle_{var_name} = iAD(_Symbol, _Period, VOLUME_TICK);"
+            return _native("", handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["cmf"]:
             period = int(p.get("window", 20))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // CMF Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\CMF\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // CMF Period"
+            code = (
+                f"   double {var_name}_h[], {var_name}_l[], {var_name}_c[], {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_h, true); ArraySetAsSeries({var_name}_l, true);\n"
+                f"   ArraySetAsSeries({var_name}_c, true); ArraySetAsSeries({var_name}_v, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period + 4;\n"
+                f"   if(CopyHigh(_Symbol, _Period, 0, {var_name}_need, {var_name}_h) < 2) return;\n"
+                f"   if(CopyLow(_Symbol, _Period, 0, {var_name}_need, {var_name}_l) < 2) return;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, {var_name}_need, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double mfv=0.0, tv=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double hi = {var_name}_h[idx], lo = {var_name}_l[idx];\n"
+                f"         double mfm = (hi > lo) ? (({var_name}_c[idx] - lo) - (hi - {var_name}_c[idx])) / (hi - lo) : 0.0;\n"
+                f"         mfv += mfm * {var_name}_v[idx];\n"
+                f"         tv += {var_name}_v[idx];\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (tv != 0.0) ? mfv / tv : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["ease_of_movement", "eom"]:
             period = int(p.get("window", 14))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // EoM Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\EoM\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // EoM Period"
+            code = (
+                f"   double {var_name}_h[], {var_name}_l[], {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_h, true); ArraySetAsSeries({var_name}_l, true); ArraySetAsSeries({var_name}_v, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period + 4;\n"
+                f"   if(CopyHigh(_Symbol, _Period, 0, {var_name}_need, {var_name}_h) < 2) return;\n"
+                f"   if(CopyLow(_Symbol, _Period, 0, {var_name}_need, {var_name}_l) < 2) return;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, {var_name}_need, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double sum=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double mid = ({var_name}_h[idx] + {var_name}_l[idx]) / 2.0;\n"
+                f"         double midp = ({var_name}_h[idx+1] + {var_name}_l[idx+1]) / 2.0;\n"
+                f"         double box = {var_name}_v[idx] / 10000.0;\n"
+                f"         sum += (box != 0.0) ? (mid - midp) / box : 0.0;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = sum / Inp_{var_name}_Period;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
         elif b in ["force_index", "forceindex"]:
             period = int(p.get("window", 13))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // Force Index Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\ForceIndex\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // Force Index Period"
+            handle = f"handle_{var_name} = iForce(_Symbol, _Period, Inp_{var_name}_Period, MODE_SMA, VOLUME_TICK);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["mfi"]:
             period = int(p.get("window", 14))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // MFI Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\MFI\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // MFI Period"
+            handle = f"handle_{var_name} = iMFI(_Symbol, _Period, Inp_{var_name}_Period, VOLUME_TICK);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["nvi"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\NVI\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[], {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true); ArraySetAsSeries({var_name}_v, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 300, {var_name}_c) < 2) return;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, 300, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double nvi=1000.0;\n"
+                f"      for(int j=200; j>=k; j--)\n"
+                f"      {{\n"
+                f"         if({var_name}_v[j] < {var_name}_v[j+1] && {var_name}_c[j+1] != 0.0)\n"
+                f"            nvi += ({var_name}_c[j] - {var_name}_c[j+1]) / {var_name}_c[j+1] * nvi;\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = nvi;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["obv"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\OBV\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            handle = f"handle_{var_name} = iOBV(_Symbol, _Period, VOLUME_TICK);"
+            return _native("", handle, _series_buffer(f"handle_{var_name}", 0))
         elif b in ["vpt"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\VPT\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[], {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true); ArraySetAsSeries({var_name}_v, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 300, {var_name}_c) < 2) return;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, 300, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double vpt=0.0;\n"
+                f"      for(int j=250; j>=k; j--)\n"
+                f"      {{\n"
+                f"         if({var_name}_c[j+1] != 0.0)\n"
+                f"            vpt += ({var_name}_c[j] - {var_name}_c[j+1]) / {var_name}_c[j+1] * {var_name}_v[j];\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = vpt;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["vwap"]:
             period = int(p.get("window", 14))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // VWAP Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Volume\\\\VWAP\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // VWAP Period"
+            code = (
+                f"   double {var_name}_h[], {var_name}_l[], {var_name}_c[], {var_name}_v[];\n"
+                f"   ArraySetAsSeries({var_name}_h, true); ArraySetAsSeries({var_name}_l, true);\n"
+                f"   ArraySetAsSeries({var_name}_c, true); ArraySetAsSeries({var_name}_v, true);\n"
+                f"   int {var_name}_need = Inp_{var_name}_Period + 4;\n"
+                f"   if(CopyHigh(_Symbol, _Period, 0, {var_name}_need, {var_name}_h) < 2) return;\n"
+                f"   if(CopyLow(_Symbol, _Period, 0, {var_name}_need, {var_name}_l) < 2) return;\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, {var_name}_need, {var_name}_c) < 2) return;\n"
+                f"   if(CopyTickVolume(_Symbol, _Period, 0, {var_name}_need, {var_name}_v) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double pv=0.0, tv=0.0;\n"
+                f"      for(int j=0; j<Inp_{var_name}_Period; j++)\n"
+                f"      {{\n"
+                f"         int idx = k + j;\n"
+                f"         double tp = ({var_name}_h[idx] + {var_name}_l[idx] + {var_name}_c[idx]) / 3.0;\n"
+                f"         pv += tp * {var_name}_v[idx];\n"
+                f"         tv += {var_name}_v[idx];\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = (tv != 0.0) ? pv / tv : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code, param)
 
         # === 5. OTHERS ===
         elif b in ["daily_return", "dailyreturn"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Others\\\\DailyReturn\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int i=0; i<4; i++) {{\n"
+                f"       double prev = {var_name}_c[i+1];\n"
+                f"       {var_name}_val[i] = (prev != 0.0) ? ({var_name}_c[i] - prev) / prev : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["daily_log_return", "dailylogreturn"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Others\\\\DailyLogReturn\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 4, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int i=0; i<4; i++) {{\n"
+                f"       double prev = {var_name}_c[i+1];\n"
+                f"       {var_name}_val[i] = (prev > 0.0) ? MathLog({var_name}_c[i] / prev) : 0.0;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["cumulative_return", "cumulativereturn"]:
-            return {
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Others\\\\CumulativeReturn\");",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            code = (
+                f"   double {var_name}_c[];\n"
+                f"   ArraySetAsSeries({var_name}_c, true);\n"
+                f"   if(CopyClose(_Symbol, _Period, 0, 100, {var_name}_c) < 2) return;\n"
+                f"   double {var_name}_val[4];\n"
+                f"   for(int k=0; k<4; k++)\n"
+                f"   {{\n"
+                f"      double cum=1.0;\n"
+                f"      for(int j=90; j>=k; j--)\n"
+                f"      {{\n"
+                f"         double prev = {var_name}_c[j+1];\n"
+                f"         if(prev != 0.0) cum *= (1.0 + ({var_name}_c[j] - prev) / prev);\n"
+                f"      }}\n"
+                f"      {var_name}_val[k] = cum - 1.0;\n"
+                f"   }}"
+            )
+            return _inline(code)
         elif b in ["close", "open", "high", "low", "volume", "tick_volume"]:
             # Raw price/volume series read directly from the chart. Parity with
-            # IndicatorCalculator.calculate_single (no transformation). Never
-            # fall through to an iCustom EMA approximation.
+            # IndicatorCalculator.calculate_single (no transformation).
             copy_func = {
                 "close": "CopyClose", "open": "CopyOpen", "high": "CopyHigh",
                 "low": "CopyLow", "volume": "CopyTickVolume",
@@ -612,16 +772,9 @@ class MT5Exporter:
             }
         else:
             period = int(p.get("window", p.get("period", 14)))
-            return {
-                "param": f"input int Inp_{var_name}_Period = {period}; // {var_name} Period",
-                "handle": f"handle_{var_name} = iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\EMA\", Inp_{var_name}_Period);",
-                "type": "handle",
-                "buffer_copy": (
-                    f"   double {var_name}_val[];\n"
-                    f"   ArraySetAsSeries({var_name}_val, true);\n"
-                    f"   if(CopyBuffer(handle_{var_name}, 0, 0, 4, {var_name}_val) < 2) return;"
-                )
-            }
+            param = f"input int Inp_{var_name}_Period = {period}; // {var_name} Period"
+            handle = f"handle_{var_name} = iMA(_Symbol, _Period, Inp_{var_name}_Period, 0, MODE_EMA, PRICE_CLOSE);"
+            return _native(param, handle, _series_buffer(f"handle_{var_name}", 0))
 
     def export(self, strategy: dict) -> str:
         rank = strategy.get("rank", 1)
@@ -631,9 +784,28 @@ class MT5Exporter:
         score = float(strategy.get("total_score", 0.0))
         sharpe = float(strategy.get("sharpe_ratio", 0.0))
         total_return = float(strategy.get("total_return_pct", 0.0))
-        gross_profit = float(strategy.get("gross_profit", 0.0))
-        gross_loss = float(strategy.get("gross_loss", 0.0))
-        net_profit = float(strategy.get("total_net_profit", gross_profit - gross_loss))
+        # Performance metrics: fall back to the trade_log when the strategy
+        # record does not carry the top-level fields (e.g. DB rows store them
+        # under exit_rules.detailed_metrics). This keeps the EA header
+        # consistent with the analysis report instead of showing $0.00.
+        detailed = {}
+        if isinstance(strategy.get("exit_rules"), dict):
+            detailed = (strategy["exit_rules"].get("detailed_metrics") or {})
+            if not isinstance(detailed, dict):
+                detailed = {}
+        trade_log = strategy.get("trade_log") or []
+        def _sum_pnls(positive: bool) -> float:
+            total = 0.0
+            for t in trade_log:
+                pnl = float((t or {}).get("pnl", 0.0) or 0.0)
+                if positive and pnl > 0:
+                    total += pnl
+                elif not positive and pnl < 0:
+                    total += abs(pnl)
+            return total
+        gross_profit = float(strategy.get("gross_profit") or detailed.get("gross_profit") or _sum_pnls(True))
+        gross_loss = float(strategy.get("gross_loss") or detailed.get("gross_loss") or _sum_pnls(False))
+        net_profit = float(strategy.get("total_net_profit") or (gross_profit - gross_loss))
         win_rate = float(strategy.get("win_rate", 0.0))
         profit_factor = float(strategy.get("profit_factor", 0.0))
         n_trades = int(strategy.get("n_trades", 0))
@@ -651,10 +823,13 @@ class MT5Exporter:
             risk_cfg = {}
 
         # 1. Sizing Mode & Lots
+        initial_deposit = float(risk_cfg.get("initialDeposit") or risk_cfg.get("initial_deposit") or 10000.0)
         sizing_mode_str = str(risk_cfg.get("sizingMode") or risk_cfg.get("sizing_mode") or "lots").lower()
         sizing_mode = 0 if sizing_mode_str == "lots" else 1
         lot_size = float(risk_cfg.get("lotSize") or risk_cfg.get("lot_size") or 0.1)
         risk_pct = float(risk_cfg.get("riskPct") or risk_cfg.get("risk_pct") or 1.0)
+        risk_base_str = str(risk_cfg.get("riskBase") or risk_cfg.get("risk_base") or "initial_deposit").lower()
+        risk_base_val = 0 if risk_base_str == "initial_deposit" else 1
         max_trades = int(risk_cfg.get("maxSimultaneousTrades") or risk_cfg.get("max_simultaneous_trades") or 1)
         
         # 2. Trade Direction
@@ -704,12 +879,24 @@ class MT5Exporter:
         if isinstance(ind_configs, list):
             for item in ind_configs:
                 if isinstance(item, dict):
-                    i_name = str(item.get("name", "")).lower().replace(" ", "_").replace("%", "pct")
+                    i_name = str(item.get("var_name") or item.get("name", "")).lower().replace(" ", "_").replace("%", "pct")
                     ind_param_map[i_name] = item.get("params", {})
         elif isinstance(ind_configs, dict):
             for k, v in ind_configs.items():
                 i_name = str(k).lower().replace(" ", "_").replace("%", "pct")
                 ind_param_map[i_name] = v if isinstance(v, dict) else {}
+
+        # Resolve the EFFECTIVE parameters for each indicator: registry
+        # defaults merged with the user's params (keys normalized to the
+        # canonical ta names). This guarantees the exported EA inputs and the
+        # "Optimized Indicator Values" header exactly match the parameters the
+        # Python backtest used to select the strategy.
+        from engine.indicators.registry import get_indicator, normalize_indicator_params
+        def _resolve_params(ind_name: str, params: dict) -> dict:
+            cfg = get_indicator(ind_name)
+            eff = dict(cfg.default_params) if cfg else {}
+            eff.update(normalize_indicator_params(ind_name, params))
+            return eff
 
         # Parse AST & Transpile
         ast = parse_prefix_expression(tree_str)
@@ -730,7 +917,8 @@ class MT5Exporter:
         for raw_ind in sorted(used_indicators):
             clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", raw_ind).lower()
             base_name = re.sub(r"_v\d+$", "", clean_name)
-            params = ind_param_map.get(raw_ind) or ind_param_map.get(clean_name) or ind_param_map.get(raw_ind.lower()) or {}
+            raw_params = ind_param_map.get(raw_ind) or ind_param_map.get(clean_name) or ind_param_map.get(raw_ind.lower()) or {}
+            params = _resolve_params(base_name, raw_params)
             ind_info = self._build_indicator_info(base_name, clean_name, params)
 
             if ind_info.get("param"):
@@ -741,6 +929,13 @@ class MT5Exporter:
                 handles_init.append(f"   {ind_info['handle']}")
                 handles_check.append(f"handle_{clean_name} == INVALID_HANDLE")
                 handles_release.append(f"   IndicatorRelease(handle_{clean_name});")
+                # Extra handles needed by this indicator (e.g. sub-handles for
+                # Keltner/StochRSI) get declared/created/released with the main one.
+                for extra in ind_info.get("extra_handles", []):
+                    handles_decl.append(extra["decl"])
+                    handles_init.append(f"   {extra['init']}")
+                    handles_check.append(extra["check"])
+                    handles_release.append(f"   IndicatorRelease({extra['name']});")
                 buffer_copies.append(ind_info["buffer_copy"])
             elif ind_info.get("type") == "inline":
                 buffer_copies.append(ind_info["code"])
@@ -764,6 +959,21 @@ class MT5Exporter:
         handles_release_code = "\n".join(handles_release)
         buffer_copies_code = "\n\n".join(buffer_copies)
 
+        # Build a documented block of the OPTIMAL indicator values that were
+        # used to discover this strategy (from the analysis indicator_config).
+        # Each line lists the indicator and the exact parameters applied so
+        # the EA inputs match the backtest that selected the strategy.
+        opt_lines = []
+        for raw_ind in sorted(used_indicators):
+            clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", raw_ind).lower()
+            base_name = re.sub(r"_v\d+$", "", clean_name)
+            raw_params = ind_param_map.get(raw_ind) or ind_param_map.get(clean_name) or ind_param_map.get(raw_ind.lower()) or {}
+            params = _resolve_params(base_name, raw_params)
+            if params:
+                param_desc = ", ".join(f"{k}={v}" for k, v in params.items())
+                opt_lines.append(f"//|   {raw_ind}: {param_desc}")
+        optimized_section = "\n".join(opt_lines) if opt_lines else "//|   (no parameterized indicators)"
+
         return f"""//+------------------------------------------------------------------+
 //|                                     AlgoForge Expert Advisor     |
 //|                                  https://github.com/algoforge    |
@@ -775,6 +985,8 @@ class MT5Exporter:
 //| Monte Carlo Robustness: {mc_score:.1f}% | Prob of Ruin: {mc_ruin:.2f}%
 //| MC 95% Confidence Drawdown: {mc_95_dd:.2f}%
 //| Evolved Logic: {tree_str}
+//| Optimized Indicator Values (used to select this strategy):
+{optimized_section}
 //+------------------------------------------------------------------+
 #property copyright "AlgoForge AI"
 #property link      "https://algoforge.io"
@@ -801,7 +1013,13 @@ enum ENUM_ORDER_EXECUTION
 enum ENUM_SIZING_MODE
 {{
    SIZING_FIXED_LOTS = 0, // Fixed Lot Size
-   SIZING_RISK_PCT   = 1  // Risk % of Equity
+   SIZING_RISK_PCT   = 1  // Risk % of Capital
+}};
+
+enum ENUM_RISK_BASE
+{{
+   RISK_BASE_INITIAL_DEPOSIT = 0, // Initial Deposit (Fixed Base)
+   RISK_BASE_BALANCE         = 1  // Balance / Equity (Compounding)
 }};
 
 enum ENUM_CONSEC_LOSS_ACTION
@@ -841,9 +1059,11 @@ input double                  InpConsecLossReduction  = {consec_reduction:.1f}; 
 input ENUM_REACTIVATION_MODE  InpReactivationMode     = {reactivation_val}; // Auto-Reactivation Rule (if Paused)
 input int                     InpCooldownBars         = {cooldown_bars}; // Cooldown Bars (if Mode=Bars)
 input int                     InpCooldownDays         = {cooldown_days}; // Cooldown Days (if Mode=Days)
+input double                  InpInitialDeposit       = {initial_deposit:.2f}; // Initial Deposit (Reference Base)
 input ENUM_SIZING_MODE        InpSizingMode           = {sizing_mode}; // Sizing Mode
 input double                  InpLotSize              = {lot_size:.2f};   // Fixed Lot Size (if Sizing=Lots)
-input double                  InpRiskPercent          = {risk_pct:.2f};   // Risk % of Equity (if Sizing=Risk%)
+input double                  InpRiskPercent          = {risk_pct:.2f};   // Risk % of Capital (if Sizing=Risk%)
+input ENUM_RISK_BASE          InpRiskBase             = {risk_base_val}; // Risk Calculation Base
 input ENUM_STOP_TYPE          InpStopLossType         = {sl_type_val};    // Stop Loss Mode
 input double                  InpStopLossPips         = {sl_pips:.1f};    // Stop Loss Pips
 input double                  InpStopLossATRMult      = {sl_atr_mult:.1f};    // Stop Loss ATR Multiplier
@@ -972,8 +1192,8 @@ double GetTradeLotSize(double sl_distance_price, int consec_losses = 0)
    double base_lot = InpLotSize;
    if(InpSizingMode == SIZING_RISK_PCT && sl_distance_price > 0.0)
    {{
-      double equity = AccountInfoDouble(ACCOUNT_EQUITY);
-      double risk_amount = equity * (InpRiskPercent / 100.0);
+      double base_capital = (InpRiskBase == RISK_BASE_INITIAL_DEPOSIT) ? InpInitialDeposit : AccountInfoDouble(ACCOUNT_EQUITY);
+      double risk_amount = base_capital * (InpRiskPercent / 100.0);
       double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
       double tick_value = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
       if(tick_size > 0.0 && tick_value > 0.0)

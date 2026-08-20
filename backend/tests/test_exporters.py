@@ -157,14 +157,16 @@ def test_mt5_exporter_williams_and_vwap():
     exporter = MT5Exporter()
     code = exporter.export(strategy)
 
-    # Verify handles match exactly (iCustom AlgoForge ports, not built-ins)
+    # Verify handles use NATIVE MT5 indicators (not iCustom ta ports)
     assert "int handle_williams_pctr;" in code
-    assert "iCustom(_Symbol, _Period, \"AlgoForge\\\\Momentum\\\\WilliamsR\", Inp_williams_pctr_Period);" in code
+    assert "iWPR(_Symbol, _Period, Inp_williams_pctr_Period);" in code
     assert "IndicatorRelease(handle_williams_pctr);" in code
     assert "double williams_pctr_val[];" in code
     assert "CopyBuffer(handle_williams_pctr, 0, 0, 4, williams_pctr_val)" in code
     assert "williams_pctr_val[1]" in code
-    assert "iWPR" not in code
+    # EMA uses native iMA with MODE_EMA; VWAP is computed inline.
+    assert "iMA(_Symbol, _Period, Inp_ema_Period, 0, MODE_EMA, PRICE_CLOSE);" in code
+    assert "iCustom" not in code
 
 def test_mt5_exporter_max_simultaneous_trades_exported():
     strategy = {
@@ -210,3 +212,80 @@ def test_mt5_exporter_raw_price_series_inline():
     assert "open_val[1]" in code
     assert "low_val[1]" in code
     assert "iCustom(_Symbol, _Period, \"AlgoForge\\\\Trend\\\\EMA\"" not in code
+
+def test_mt5_exporter_optimized_indicator_values_section():
+    # The generated EA must document the OPTIMAL indicator values used to
+    # select the strategy, and the header must show real net profit (not $0).
+    strategy = {
+        "id": "Optimal_01",
+        "rank": 2,
+        "symbol": "EURUSD",
+        "timeframe": "1h",
+        "strategy_tree": "and(gt(RSI, EMA), lt(Bollinger, c_50))",
+        "n_trades": 25,
+        "indicator_config": [
+            {"name": "RSI", "params": {"period": 21}, "var_name": "RSI"},
+            {"name": "EMA", "params": {"period": 50}, "var_name": "EMA"},
+            {"name": "Bollinger", "params": {"period": 22, "deviation": 2.25}, "var_name": "Bollinger"},
+        ],
+        "trade_log": [
+            {"pnl": 90.4}, {"pnl": -4.6}, {"pnl": 60.0},
+        ],
+        "risk_config": {"direction": "long", "orderType": "market", "slType": "none", "tpType": "none"}
+    }
+    code = MT5Exporter().export(strategy)
+
+    # 1. Optimized indicator values section present with actual params.
+    assert "Optimized Indicator Values (used to select this strategy)" in code
+    assert "Bollinger: window=22, window_dev=2.25" in code
+    assert "RSI: window=21" in code
+    assert "EMA: window=50" in code
+
+    # 2. Inputs reflect the effective (frontend-normalized) params.
+    assert "Inp_bollinger_Period = 22;" in code
+    assert "Inp_bollinger_Dev = 2.25;" in code
+    assert "Inp_rsi_Period = 21;" in code
+
+    # 3. Header net profit computed from trade_log when fields are missing.
+    assert "Total Net Profit: $145.80" in code
+
+def test_mt5_exporter_net_profit_fallback_to_detailed_metrics():
+    strategy = {
+        "id": "Fallback_01",
+        "rank": 1,
+        "strategy_tree": "gt(RSI, c_50)",
+        "indicator_config": [{"name": "RSI", "params": {}}],
+        "exit_rules": {
+            "detailed_metrics": {"gross_profit": 500.0, "gross_loss": 200.0}
+        },
+        "risk_config": {"direction": "long", "orderType": "market", "slType": "none", "tpType": "none"}
+    }
+    code = MT5Exporter().export(strategy)
+    assert "Total Net Profit: $300.00" in code
+
+def test_mt5_exporter_combostrategy_iclose():
+    strategy = {
+        "id": "Combo_EMA_01",
+        "rank": 1,
+        "strategy_tree": "ComboStrategy(EMA(period=20))",
+        "indicator_config": [{"name": "EMA", "params": {"window": 20}, "var_name": "EMA"}],
+        "risk_config": {"swingLookback": 20, "slType": "atr", "slAtrMult": 1.5, "tpType": "atr", "tpAtrMult": 3.0}
+    }
+    code = MT5Exporter().export(strategy)
+    assert "iClose(_Symbol, _Period, 1)" in code
+    assert "close_val[1]" not in code
+    assert "swing_structure_val" not in code
+
+def test_mt5_exporter_combostrategy_tpsl_filtering():
+    strategy = {
+        "id": "Combo_Legacy_01",
+        "rank": 2,
+        "strategy_tree": "ComboStrategy(EMA(period=90) | TP/SL: atr_classic(sl_atr=0.5, tp_atr=5.0), swing_structure(lookback=20))",
+        "indicator_config": [{"name": "EMA", "params": {"window": 90}, "var_name": "EMA"}],
+        "risk_config": {"swingLookback": 20}
+    }
+    code = MT5Exporter().export(strategy)
+    assert "iClose(_Symbol, _Period, 1)" in code
+    assert "close_val[1]" not in code
+    assert "swing_structure_val" not in code
+    assert "atr_classic_val" not in code

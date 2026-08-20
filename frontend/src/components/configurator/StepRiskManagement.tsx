@@ -1,11 +1,9 @@
 import React from 'react';
 import { useJobStore } from '../../store/jobStore';
 import Input from '../common/Input';
-import type { StrategyApproach } from '../../types/job';
+import { TPSLManagementSection } from './TPSLManagementSection';
 import { 
   Scale, 
-  Target, 
-  Percent, 
   Sliders, 
   Layers, 
   ArrowLeftRight, 
@@ -17,108 +15,26 @@ import {
   ArrowDownLeft,
   Timer,
   AlertTriangle,
-  Flame,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Percent,
+  DollarSign
 } from 'lucide-react';
 import styles from '../../styles/pages.module.css';
-
-interface StrategyApproachCard {
-  key: StrategyApproach;
-  title: string;
-  badge: string;
-  badgeColor: string;
-  structure: string;
-  entry: string;
-  context: string;
-  example: string;
-}
-
-const STRATEGY_APPROACHES: StrategyApproachCard[] = [
-  {
-    key: 'all',
-    title: 'Cualquiera (Automático / Híbrido)',
-    badge: 'Auto Discovery',
-    badgeColor: 'var(--color-accent-cyan)',
-    structure: 'Exploración combinatoria libre',
-    entry: 'Optimización genética de señales de indicadores y precio',
-    context: 'Cualquier régimen de mercado',
-    example: 'El algoritmo evalúa y genera las mejores combinaciones sin restringir el patrón de entrada.'
-  },
-  {
-    key: 'break_retest',
-    title: 'Break & Retest',
-    badge: 'Continuación',
-    badgeColor: 'var(--color-accent-emerald)',
-    structure: 'Ruptura + retest a zona rota',
-    entry: 'Rechazo o patrón confirmatorio (mecha / engulfing)',
-    context: 'Tendencia fuerte con volumen expansivo',
-    example: '1. Rompe con vela fuerte y volumen creciente.\n2. Retrocede a la zona rota (pullback).\n3. Se forma rechazo (mecha o patrón engulfing).\n4. Entra en la dirección de la ruptura original.'
-  },
-  {
-    key: 'fakeout',
-    title: 'Fakeout (Falsa Ruptura)',
-    badge: 'Reversión / Trampa',
-    badgeColor: 'var(--color-accent-rose)',
-    structure: 'Rompe y vuelve a la estructura previa',
-    entry: 'Reingreso confirmado dentro del rango',
-    context: 'Zonas de liquidez, extremos de sesión, barridos',
-    example: '1. Rompimiento falso por mecha o cierre sin confirmación.\n2. Volumen alto en la mecha (absorción).\n3. Estructura previa intacta.\n4. Entrada cuando el precio regresa dentro del rango.'
-  },
-  {
-    key: 'breakout',
-    title: 'Breakout Directo',
-    badge: 'Impulso / Momentum',
-    badgeColor: 'var(--color-accent-amber)',
-    structure: 'Ruptura directa de consolidación',
-    entry: 'Entrada inmediata con momentum sin esperar retest',
-    context: 'Apertura de sesión NY/Londres o alta volatilidad',
-    example: '1. Vela amplia, cuerpo dominante, volumen alto.\n2. Nivel de consolidación roto claramente.\n3. Entrada directa por momentum (órdenes Stop o Market).'
-  },
-  {
-    key: 'reversion',
-    title: 'Reversión de Tendencia',
-    badge: 'Cambio de Estructura',
-    badgeColor: 'var(--color-accent-rose)',
-    structure: 'Doble techo/suelo, fallo de nuevo extremo (MSS)',
-    entry: 'Pullback al nuevo nivel de quiebre de estructura',
-    context: 'Tendencia extendida (3+ impulsos) y agotamiento',
-    example: '1. Tendencia extendida previa con divergencia.\n2. Quiebre de estructura menor (MSS en temporalidad de entrada).\n3. Entrada en pullback al nuevo punto de ruptura.'
-  },
-  {
-    key: 'pullback',
-    title: 'Pullback en Tendencia',
-    badge: 'Continuación Dinámica',
-    badgeColor: 'var(--color-accent-cyan)',
-    structure: 'Corrección temporal dentro de tendencia activa',
-    entry: 'Rechazo en zona dinámica (EMA, FVG, 50% Fibo)',
-    context: 'Tendencia clara (HH-HL / LH-LL) en sesiones activas',
-    example: '1. Tendencia alcista marcada.\n2. Precio corrige hasta EMA o zona de liquidez con vela de mecha larga.\n3. Vela de confirmación alcista (engulfing/pin bar).\n4. Entrada al cierre con SL debajo del retroceso.'
-  }
-];
 
 export const StepRiskManagement: React.FC = () => {
   const { config, updateRisk } = useJobStore();
   const risk = config.risk || {
-    initialDeposit: 10000,
-    sizingMode: 'lots',
-    lotSize: 0.1,
-    riskPct: 1.0,
     direction: 'both',
-    strategyApproach: 'all',
     orderType: 'market',
-    pendingTimeoutBars: 3,
-    pendingOffsetPips: 5.0,
-    maxHoldingBars: 0,
+    maxSimultaneousTrades: 1,
     consecutiveLossAction: 'none',
     consecutiveLossThreshold: 3,
     consecutiveLossReductionPct: 50,
-    slType: 'pips',
-    slPips: 50.0,
-    slAtrMult: 1.5,
-    tpType: 'pips',
-    tpPips: 100.0,
-    tpAtrMult: 3.0,
+    consecutiveLossReactivation: 'none',
+    consecutiveLossCooldownBars: 20,
+    consecutiveLossCooldownDays: 1,
+    consecutiveLossAutoCooldown: true,
     contractSize: 100000,
     pointSize: 0.0001,
     spreadPips: 1.0,
@@ -129,95 +45,21 @@ export const StepRiskManagement: React.FC = () => {
 
   const currentDir = risk.direction || 'both';
   const currentOrderType = risk.orderType || 'market';
-  const currentApproach = risk.strategyApproach || 'all';
   const currentLossAction = risk.consecutiveLossAction || 'none';
 
   return (
-    <div className={styles.stepContainer}>
+    <div className={styles.stepContainer} style={{ maxWidth: '1100px', margin: '0 auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-main)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Sparkles size={22} color="var(--color-accent-cyan)" />
-          Strategy config, Enfoque & Gestión de Riesgo
+          Strategy Config & Gestión de Ejecución
         </h2>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-          Selecciona el enfoque de Price Action deseado (Break & Retest, Fakeout, Breakout, Reversión, Pullback), la dirección, el tipo de orden y los mecanismos de protección contra rachas perdedoras.
+          Configura la dirección operativa permitida, el modo de ejecución de órdenes, operaciones simultáneas, protección contra rachas perdedoras y costos de MT5.
         </p>
       </div>
 
-      {/* 1. Strategy Approach Selector Cards */}
-      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <Flame size={18} color="var(--color-accent-amber)" />
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-            Enfoque de Estrategia (Price Action & Estructura)
-          </h3>
-        </div>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Define la lógica estructural dominante que el motor de IA priorizará al generar y filtrar las estrategias.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '0.875rem' }}>
-          {STRATEGY_APPROACHES.map(app => {
-            const isSelected = currentApproach === app.key;
-            return (
-              <div
-                key={app.key}
-                onClick={() => updateRisk({ strategyApproach: app.key })}
-                style={{
-                  padding: '1rem',
-                  borderRadius: '6px',
-                  border: isSelected ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
-                  background: isSelected ? 'rgba(0, 212, 255, 0.06)' : 'rgba(255, 255, 255, 0.015)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                  boxShadow: isSelected ? '0 0 12px rgba(0, 212, 255, 0.1)' : 'none'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.9375rem', color: isSelected ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
-                    {app.title}
-                  </span>
-                  <span style={{
-                    fontSize: '0.6875rem',
-                    fontWeight: 600,
-                    padding: '0.125rem 0.375rem',
-                    borderRadius: '4px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    color: app.badgeColor,
-                    border: `1px solid ${app.badgeColor}33`
-                  }}>
-                    {app.badge}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                  <div><strong style={{ color: 'var(--color-text-main)' }}>Estructura:</strong> {app.structure}</div>
-                  <div><strong style={{ color: 'var(--color-text-main)' }}>Entrada:</strong> {app.entry}</div>
-                  <div><strong style={{ color: 'var(--color-text-main)' }}>Contexto:</strong> {app.context}</div>
-                </div>
-
-                <div style={{
-                  marginTop: '0.25rem',
-                  padding: '0.5rem',
-                  background: 'rgba(0, 0, 0, 0.25)',
-                  borderRadius: '4px',
-                  fontSize: '0.6875rem',
-                  color: 'var(--color-text-muted)',
-                  whiteSpace: 'pre-line',
-                  lineHeight: '1.3'
-                }}>
-                  {app.example}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. Direction and Order Execution Grid */}
+      {/* 1. Direction and Order Execution Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
         
         {/* Trade Direction Selector */}
@@ -225,11 +67,11 @@ export const StepRiskManagement: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <ArrowLeftRight size={18} color="var(--color-accent-cyan)" />
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Allowed Trade Direction
+              Dirección de Operaciones Permitida
             </h3>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
-            Choose whether strategies seek buy setups, sell short setups, or both directions.
+            Define si el algoritmo busca compras (Long), ventas en corto (Short), o ambas direcciones.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
@@ -306,11 +148,11 @@ export const StepRiskManagement: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <Zap size={18} color="var(--color-accent-amber)" />
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Order Execution Mode
+              Tipo de Entrada / Órdenes
             </h3>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
-            Execution mechanism tested in backtests and exported to MT5.
+            Mecanismo de ejecución testeado en el backtest y exportado a MT5.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
@@ -332,7 +174,7 @@ export const StepRiskManagement: React.FC = () => {
             >
               <Zap size={16} color={currentOrderType === 'market' ? 'var(--color-accent-amber)' : 'var(--color-text-muted)'} />
               <span style={{ fontWeight: 600, fontSize: '0.75rem', color: currentOrderType === 'market' ? 'var(--color-accent-amber)' : 'var(--color-text-main)' }}>
-                On Market
+                A Mercado
               </span>
             </button>
 
@@ -384,25 +226,32 @@ export const StepRiskManagement: React.FC = () => {
 
       </div>
 
-      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: '0 0 0.5rem 0' }}>
-          Simultaneous Trades
-        </h3>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Establece cuántas operaciones simultáneas puede abrir el bot al mismo tiempo si la condición de entrada se sigue cumpliendo. (1 = Operación única por estrategia)
-        </p>
+      {/* 2. Capital, Sizing & Simultaneous Trades Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem', marginBottom: '1.25rem' }}>
+        
+        {/* Card 1: Capital Inicial y Dimensionamiento de Posición */}
+        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <DollarSign size={18} color="var(--color-accent-cyan)" />
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+              Capital & Dimensionamiento de Posición
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+            Define el depósito inicial y si el tamaño de posición se calcula por lotaje fijo o porcentaje de riesgo.
+          </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-          <div>
+          {/* Depósito Inicial */}
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
-              Max Operaciones Simultáneas
+              Depósito Inicial ($ USD)
             </label>
             <input
               type="number"
-              min="1"
-              max="20"
-              value={risk.maxSimultaneousTrades || 1}
-              onChange={(e) => updateRisk({ maxSimultaneousTrades: Number(e.target.value) })}
+              min="100"
+              step="100"
+              value={risk.initialDeposit ?? 10000}
+              onChange={(e) => updateRisk({ initialDeposit: Math.max(10, Number(e.target.value) || 10000) })}
               style={{
                 width: '100%',
                 padding: '0.5rem 0.75rem',
@@ -414,10 +263,223 @@ export const StepRiskManagement: React.FC = () => {
               }}
             />
           </div>
+
+          {/* Selector de Modo de Dimensionamiento */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.375rem' }}>
+              Modo de Cálculo de Tamaño
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => updateRisk({ sizingMode: 'lots' })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.375rem',
+                  padding: '0.625rem 0.5rem',
+                  borderRadius: '6px',
+                  border: (risk.sizingMode || 'lots') === 'lots' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                  background: (risk.sizingMode || 'lots') === 'lots' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  color: (risk.sizingMode || 'lots') === 'lots' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)',
+                  fontWeight: 600,
+                  fontSize: '0.75rem'
+                }}
+              >
+                <Layers size={14} />
+                <span>Lote Fijo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateRisk({ sizingMode: 'risk_pct' })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.375rem',
+                  padding: '0.625rem 0.5rem',
+                  borderRadius: '6px',
+                  border: risk.sizingMode === 'risk_pct' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                  background: risk.sizingMode === 'risk_pct' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  color: risk.sizingMode === 'risk_pct' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)',
+                  fontWeight: 600,
+                  fontSize: '0.75rem'
+                }}
+              >
+                <Percent size={14} />
+                <span>% de Riesgo</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Conditional Input based on sizing mode */}
+          {(risk.sizingMode || 'lots') === 'lots' ? (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                Lote por Operación
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={risk.lotSize ?? 0.1}
+                onChange={(e) => updateRisk({ lotSize: Math.max(0.01, Number(e.target.value) || 0.1) })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-main)',
+                  fontSize: '0.875rem'
+                }}
+              />
+              <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                Volumen constante por trade (ej. 0.10 lotes estándar = 10,000 unidades).
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                  % de Riesgo por Operación
+                </label>
+                <input
+                  type="number"
+                  min="0.1"
+                  max="100"
+                  step="0.1"
+                  value={risk.riskPct ?? 1.0}
+                  onChange={(e) => updateRisk({ riskPct: Math.max(0.1, Number(e.target.value) || 1.0) })}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-bg-tertiary)',
+                    color: 'var(--color-text-main)',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+
+              {/* Base del Porcentaje de Riesgo */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.375rem' }}>
+                  Base de Cálculo del Porcentaje de Riesgo
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => updateRisk({ riskBase: 'initial_deposit' })}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      padding: '0.625rem 0.5rem',
+                      borderRadius: '6px',
+                      border: (risk.riskBase || 'initial_deposit') === 'initial_deposit' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
+                      background: (risk.riskBase || 'initial_deposit') === 'initial_deposit' ? 'rgba(0, 212, 255, 0.08)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.75rem', color: (risk.riskBase || 'initial_deposit') === 'initial_deposit' ? 'var(--color-accent-cyan)' : 'var(--color-text-main)' }}>
+                      Depósito Inicial
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>
+                      Monto fijo por trade
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateRisk({ riskBase: 'balance' })}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      padding: '0.625rem 0.5rem',
+                      borderRadius: '6px',
+                      border: risk.riskBase === 'balance' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
+                      background: risk.riskBase === 'balance' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.75rem', color: risk.riskBase === 'balance' ? 'var(--color-accent-emerald)' : 'var(--color-text-main)' }}>
+                      Balance (Compuesto)
+                    </span>
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>
+                      Interés compuesto
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Card 2: Operaciones Simultáneas */}
+        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <Layers size={18} color="var(--color-accent-cyan)" />
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
+                Operaciones Simultáneas
+              </h3>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
+              Establece cuántas operaciones simultáneas puede abrir el bot al mismo tiempo si la condición de entrada se sigue cumpliendo en nuevas velas. (1 = Operación única por estrategia).
+            </p>
+
+            <div style={{ maxWidth: '280px', marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>
+                Max Operaciones Simultáneas
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={risk.maxSimultaneousTrades || 1}
+                onChange={(e) => updateRisk({ maxSimultaneousTrades: Number(e.target.value) || 1 })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-main)',
+                  fontSize: '0.875rem'
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{
+            background: 'rgba(0, 212, 255, 0.04)',
+            border: '1px solid rgba(0, 212, 255, 0.15)',
+            borderRadius: '6px',
+            padding: '0.75rem',
+            fontSize: '0.75rem',
+            color: 'var(--color-text-muted)'
+          }}>
+            💡 <strong>Nota:</strong> Si se permite más de 1 posición simultánea, cada trade gestionará su propio Stop Loss y Take Profit independiente según el precio de apertura de su respectiva vela.
+          </div>
+        </div>
+
       </div>
 
-      {/* 3. Consecutive Losses Protection (Kill Switch & Risk Reduction) */}
+      {/* 3. TP/SL Management Section */}
+      <TPSLManagementSection />
+
+      {/* 4. Consecutive Losses Protection (Kill Switch & Risk Reduction) */}
       <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <AlertTriangle size={18} color="var(--color-accent-rose)" />
@@ -426,7 +488,7 @@ export const StepRiskManagement: React.FC = () => {
           </h3>
         </div>
         <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Protege tu cuenta activando una reducción dinámica de lotaje o pausando las operaciones del bot tras acumular $X$ pérdidas seguidas.
+          Protege tu cuenta activando una reducción dinámica de lotaje o pausando las operaciones del bot tras acumular X pérdidas seguidas.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -521,7 +583,7 @@ export const StepRiskManagement: React.FC = () => {
                 max="90"
                 value={risk.consecutiveLossReductionPct || 50}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ consecutiveLossReductionPct: parseInt(e.target.value) || 50 })}
-                tooltip="Porcentaje al que se reduce el lotaje o riesgo (ej: 50% reduce el lote a la mitad durante la racha)."
+                tooltip="Porcentaje al que se reduce el lotaje o riesgo durante la racha."
                 tooltipTitle="Factor de Reducción"
               />
             )}
@@ -741,377 +803,10 @@ export const StepRiskManagement: React.FC = () => {
         )}
       </div>
 
-      {/* 4. Timing & Candle Count Configuration */}
-      <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <Clock size={18} color="var(--color-accent-cyan)" />
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-            Timing & Candle Rules (Candle Count Exits & Cancellations)
-          </h3>
-        </div>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '1rem' }}>
-          Configure maximum holding time in candles and expiration timeout for pending orders before automatic cancellation.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-          {/* Rule 1: Pending Order Expiration */}
-          <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.5rem' }}>
-              <Timer size={16} color="var(--color-accent-amber)" />
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-main)' }}>
-                Pending Order Timeout (Velas para Omitir)
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
-              Si se coloca un Buy Stop / Sell Stop y pasan <b>X velas</b> sin activarse, la orden se cancela automáticamente.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              <Input
-                id="risk-pending-timeout"
-                label="Max Velas Pendiente"
-                type="number"
-                step="1"
-                min="1"
-                max="50"
-                value={risk.pendingTimeoutBars || 3}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pendingTimeoutBars: parseInt(e.target.value) || 3 })}
-                tooltip="Cantidad de velas que la orden pendiente Buy Stop / Sell Stop permanecerá activa antes de ser descartada si el precio no la toca."
-                tooltipTitle="Cancelación de Orden Pendiente"
-              />
-              <Input
-                id="risk-pending-offset"
-                label="Offset Distancia (Pips)"
-                type="number"
-                step="0.5"
-                min="0.0"
-                max="50.0"
-                value={risk.pendingOffsetPips || 5.0}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ pendingOffsetPips: parseFloat(e.target.value) || 5.0 })}
-                tooltip="Distancia en pips por encima del High (para Buy Stop) o por debajo del Low (para Sell Stop) al colocar la orden pendiente."
-                tooltipTitle="Offset de Entrada Pendiente"
-              />
-            </div>
-          </div>
-
-          {/* Rule 2: Max Holding Period / Candle Time Exit */}
-          <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.5rem' }}>
-              <Clock size={16} color="var(--color-accent-emerald)" />
-              <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-main)' }}>
-                Time-Based Exit (Cierre tras X Velas)
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.75rem' }}>
-              Cierra obligatoriamente la posición abierta si han transcurrido <b>X velas</b> desde la entrada sin tocar SL/TP.
-            </p>
-            <Input
-              id="risk-max-holding-bars"
-              label="Cerrar tras X Velas (0 = Desactivado)"
-              type="number"
-              step="1"
-              min="0"
-              max="200"
-              value={risk.maxHoldingBars || 0}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ maxHoldingBars: parseInt(e.target.value) || 0 })}
-              tooltip="Límite máximo de duración del trade en velas. Si se coloca 0, la posición solo cerrará al tocar Stop Loss, Take Profit o señal contraria."
-              tooltipTitle="Cierre por Tiempo / Velas"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Position Sizing, SL, TP & Contract Spec Grid */}
+      {/* 4. Symbol & Contract Spec and MT5 Realistic Costs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
         
-        {/* Section 1: Position Sizing Mode */}
-        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Scale size={18} color="var(--color-accent-cyan)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Position Sizing
-            </h3>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={() => updateRisk({ sizingMode: 'lots' })}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                padding: '0.625rem',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                border: risk.sizingMode === 'lots' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
-                background: risk.sizingMode === 'lots' ? 'rgba(0, 212, 255, 0.1)' : 'transparent',
-                color: risk.sizingMode === 'lots' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Layers size={16} />
-              Fixed Lots
-            </button>
-            <button
-              type="button"
-              onClick={() => updateRisk({ sizingMode: 'risk_pct' })}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                padding: '0.625rem',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                border: risk.sizingMode === 'risk_pct' ? '1px solid var(--color-accent-cyan)' : '1px solid var(--color-border)',
-                background: risk.sizingMode === 'risk_pct' ? 'rgba(0, 212, 255, 0.1)' : 'transparent',
-                color: risk.sizingMode === 'risk_pct' ? 'var(--color-accent-cyan)' : 'var(--color-text-muted)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Percent size={16} />
-              Risk % Equity
-            </button>
-          </div>
-
-          {risk.sizingMode === 'lots' ? (
-            <Input
-              id="risk-lot-size"
-              label="Fixed Lot Size"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={risk.lotSize}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ lotSize: parseFloat(e.target.value) || 0.01 })}
-              tooltip="Fixed trading volume per position in standard lots (e.g. 0.10 lots = 10,000 units on Forex, 0.10 contract on Crypto/Indices)."
-              tooltipTitle="Lot Size"
-            />
-          ) : (
-            <Input
-              id="risk-pct-size"
-              label="Risk % per Trade"
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="10.0"
-              value={risk.riskPct}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ riskPct: parseFloat(e.target.value) || 1.0 })}
-              tooltip="Percentage of account equity risked on each trade. Volume is dynamically calculated so that reaching the Stop Loss equals this loss amount."
-              tooltipTitle="Risk Percentage"
-            />
-          )}
-
-          <div style={{ marginTop: '0.75rem' }}>
-            <Input
-              id="risk-initial-deposit"
-              label="Initial Deposit ($)"
-              type="number"
-              step="100"
-              min="100"
-              value={risk.initialDeposit}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ initialDeposit: parseFloat(e.target.value) || 10000 })}
-              tooltip="Starting capital in USD used for backtesting and return calculations."
-              tooltipTitle="Initial Deposit"
-            />
-          </div>
-        </div>
-
-        {/* Section 2: Stop Loss Configuration */}
-        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Target size={18} color="var(--color-accent-rose)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Stop Loss (SL)
-            </h3>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.375rem', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={() => updateRisk({ slType: 'pips' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.slType === 'pips' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
-                background: risk.slType === 'pips' ? 'rgba(244, 63, 94, 0.1)' : 'transparent',
-                color: risk.slType === 'pips' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              Fixed Pips
-            </button>
-            <button
-              type="button"
-              onClick={() => updateRisk({ slType: 'atr' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.slType === 'atr' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
-                background: risk.slType === 'atr' ? 'rgba(244, 63, 94, 0.1)' : 'transparent',
-                color: risk.slType === 'atr' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              ATR Multiple
-            </button>
-            <button
-              type="button"
-              onClick={() => updateRisk({ slType: 'none' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.slType === 'none' ? '1px solid var(--color-accent-rose)' : '1px solid var(--color-border)',
-                background: risk.slType === 'none' ? 'rgba(244, 63, 94, 0.1)' : 'transparent',
-                color: risk.slType === 'none' ? 'var(--color-accent-rose)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              Signal Only
-            </button>
-          </div>
-
-          {risk.slType === 'pips' && (
-            <Input
-              id="risk-sl-pips"
-              label="Stop Loss (Pips)"
-              type="number"
-              step="1"
-              min="1"
-              value={risk.slPips}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ slPips: parseFloat(e.target.value) || 50.0 })}
-              tooltip="Distance in pips from entry price for the Stop Loss order."
-              tooltipTitle="Fixed Stop Loss"
-            />
-          )}
-
-          {risk.slType === 'atr' && (
-            <Input
-              id="risk-sl-atr"
-              label="SL ATR Multiplier (x ATR)"
-              type="number"
-              step="0.1"
-              min="0.5"
-              value={risk.slAtrMult}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ slAtrMult: parseFloat(e.target.value) || 1.5 })}
-              tooltip="Dynamic stop loss calculated as a multiple of the current Average True Range (e.g. 1.5x ATR)."
-              tooltipTitle="ATR Stop Loss"
-            />
-          )}
-
-          {risk.slType === 'none' && (
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will remain open until an opposite exit signal or candle timeout is reached.
-            </div>
-          )}
-        </div>
-
-        {/* Section 3: Take Profit Configuration */}
-        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Target size={18} color="var(--color-accent-emerald)" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-main)', margin: 0 }}>
-              Take Profit (TP)
-            </h3>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.375rem', marginBottom: '1rem' }}>
-            <button
-              type="button"
-              onClick={() => updateRisk({ tpType: 'pips' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.tpType === 'pips' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
-                background: risk.tpType === 'pips' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                color: risk.tpType === 'pips' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              Fixed Pips
-            </button>
-            <button
-              type="button"
-              onClick={() => updateRisk({ tpType: 'atr' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.tpType === 'atr' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
-                background: risk.tpType === 'atr' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                color: risk.tpType === 'atr' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              ATR Multiple
-            </button>
-            <button
-              type="button"
-              onClick={() => updateRisk({ tpType: 'none' })}
-              style={{
-                padding: '0.5rem',
-                borderRadius: '6px',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                border: risk.tpType === 'none' ? '1px solid var(--color-accent-emerald)' : '1px solid var(--color-border)',
-                background: risk.tpType === 'none' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                color: risk.tpType === 'none' ? 'var(--color-accent-emerald)' : 'var(--color-text-muted)',
-                cursor: 'pointer'
-              }}
-            >
-              Signal Only
-            </button>
-          </div>
-
-          {risk.tpType === 'pips' && (
-            <Input
-              id="risk-tp-pips"
-              label="Take Profit (Pips)"
-              type="number"
-              step="1"
-              min="1"
-              value={risk.tpPips}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ tpPips: parseFloat(e.target.value) || 100.0 })}
-              tooltip="Distance in pips from entry price for the Take Profit order."
-              tooltipTitle="Fixed Take Profit"
-            />
-          )}
-
-          {risk.tpType === 'atr' && (
-            <Input
-              id="risk-tp-atr"
-              label="TP ATR Multiplier (x ATR)"
-              type="number"
-              step="0.1"
-              min="0.5"
-              value={risk.tpAtrMult}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ tpAtrMult: parseFloat(e.target.value) || 3.0 })}
-              tooltip="Dynamic take profit calculated as a multiple of the current Average True Range (e.g. 3.0x ATR)."
-              tooltipTitle="ATR Take Profit"
-            />
-          )}
-
-          {risk.tpType === 'none' && (
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
-              Positions will close upon reaching an opposite signal or max holding candles limit.
-            </div>
-          )}
-        </div>
-
-        {/* Section 4: Contract & Point Parameters */}
+        {/* Symbol & Contract Spec */}
         <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1126,7 +821,7 @@ export const StepRiskManagement: React.FC = () => {
           </div>
 
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
-            Copia los valores desde la ventana <strong>Especificación de MT5</strong> para calcular el valor exacto del pip y lotaje:
+            Copia los valores desde la ventana <strong>Especificación de MT5</strong> para calcular el valor exacto del pip:
           </p>
 
           {/* Quick Presets for Common Asset Classes */}
@@ -1218,14 +913,13 @@ export const StepRiskManagement: React.FC = () => {
             />
           </div>
 
-          {/* MT5 Direct Mapping Info Box */}
           <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <div>🔹 <strong>Contract Size:</strong> Copia directo el campo <code>Contract size</code> de la ficha MT5.</div>
             <div>🔹 <strong>Point / Pip Size:</strong> Se obtiene de los <code>Digits</code> de MT5: 2 dígitos = <code>0.01</code>, 3 dígitos = <code>0.001</code>, 5 dígitos = <code>0.00001</code>.</div>
           </div>
         </div>
 
-        {/* Section 5: MT5 Realistic Costs (Spread, Commission, Swap) */}
+        {/* MT5 Realistic Costs (Spread, Commission, Swap) */}
         <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             <Scale size={18} color="var(--color-accent-rose)" />
@@ -1235,7 +929,7 @@ export const StepRiskManagement: React.FC = () => {
           </div>
 
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
-            El simulador debe castigar los costos que MT5 cobra en cada operación, o el backtest infla el PnL (spread gratis + comisión de un solo lado + sin swap). Configura los valores de <strong>tu broker</strong>.
+            El simulador cobra los costos que MT5 aplica en cada operación para evitar métricas irreales.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -1247,7 +941,7 @@ export const StepRiskManagement: React.FC = () => {
               min="0"
               value={risk.spreadPips}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ spreadPips: parseFloat(e.target.value) || 0 })}
-              tooltip="Spread medio del símbolo en pips. El simulador compra al Ask (Open + spread/2) y vende al Bid (Open - spread/2), como MT5."
+              tooltip="Spread medio del símbolo en pips."
               tooltipTitle="Spread Bid/Ask"
             />
             <Input
@@ -1258,7 +952,7 @@ export const StepRiskManagement: React.FC = () => {
               min="0"
               value={risk.commissionPerLot}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ commissionPerLot: parseFloat(e.target.value) || 0 })}
-              tooltip="Comisión por lote (por lado, si 'Por lado' está activo). Ej: $7/lote = $0.70 por 0.1 lote en cada deal."
+              tooltip="Comisión por lote cobrada por el broker."
               tooltipTitle="Comisión por Lote"
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-text-main)', fontWeight: 500, padding: '0.25rem 0' }}>
@@ -1268,7 +962,7 @@ export const StepRiskManagement: React.FC = () => {
                 onChange={(e) => updateRisk({ commissionPerSide: e.target.checked })}
                 style={{ accentColor: 'var(--color-accent-rose)', width: '16px', height: '16px' }}
               />
-              <span><b>Comisión por lado</b> (entrada + salida, como MT5)</span>
+              <span><b>Comisión por lado</b> (entrada + salida)</span>
             </label>
             <Input
               id="risk-swap-day"
@@ -1278,13 +972,9 @@ export const StepRiskManagement: React.FC = () => {
               min="0"
               value={risk.swapPerLotPerDay}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRisk({ swapPerLotPerDay: parseFloat(e.target.value) || 0 })}
-              tooltip="Financiamiento overnight por lote y por día que la posición permanece abierta (0 = sin swap). Revisa la ficha MT5 del símbolo."
+              tooltip="Financiamiento overnight por lote y por día (0 = sin swap)."
               tooltipTitle="Swap Overnight"
             />
-          </div>
-
-          <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', fontSize: '0.6875rem', color: 'var(--color-text-secondary)' }}>
-            💡 Con ~600-1000 operaciones, el spread + comisión doble + swap pueden costar miles de dólares. Configúralos <strong>antes</strong> de optimizar para que la IA descarte estrategias que solo viven del spread gratis.
           </div>
         </div>
 

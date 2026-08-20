@@ -69,23 +69,40 @@ def parse_constant_value(s: str) -> float:
         return 0.0
 
 def extract_indicators(node: ExpressionNode) -> set[str]:
-    """Find all technical indicator symbols used in the AST, ignoring numbers and constants."""
+    """Find all technical indicator symbols used in the AST, ignoring numbers, constants, and TP/SL keywords."""
     indicators = set()
     KNOWN_FUNCS = {
         "add", "sub", "mul", "div", "gt", "lt", "gte", "lte", "eq",
         "and_op", "or_op", "not_op", "neg", "abs_diff", "crossover",
         "crossunder", "cross_above", "cross_below", "if_then_else",
-        "max_op", "min_op", "safe_add", "safe_sub", "safe_mul", "safe_div"
+        "max_op", "min_op", "safe_add", "safe_sub", "safe_mul", "safe_div",
+        "combostrategy",
+        # TP/SL keywords that might appear in legacy trees
+        "swing_structure", "atr_classic", "trailing_stop", "breakeven", "time_exit",
+        "percentage", "partial_tp", "fixed_pips", "default", "tp_sl", "tpsl"
     }
 
     def walk(n: ExpressionNode):
         tok = n.token
         if n.is_leaf():
-            if not tok.startswith("c_") and not is_number(tok) and tok not in KNOWN_FUNCS:
-                indicators.add(tok)
+            clean_tok = re.sub(r"\(.*?\)", "", tok).strip()
+            clean_tok = re.sub(r"^TP/SL:\s*", "", clean_tok, flags=re.IGNORECASE).strip()
+            clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", clean_tok).lower()
+            if not tok.startswith("c_") and not is_number(tok) and clean_name not in KNOWN_FUNCS:
+                if clean_tok:
+                    indicators.add(clean_tok)
         else:
-            for child in n.args:
-                walk(child)
+            if tok.lower() == "combostrategy":
+                for child in n.args:
+                    clean_child = re.sub(r"\(.*?\)", "", child.token).strip()
+                    clean_child = re.sub(r"^TP/SL:\s*", "", clean_child, flags=re.IGNORECASE).strip()
+                    clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", clean_child).lower()
+                    if clean_name not in KNOWN_FUNCS:
+                        if clean_child:
+                            indicators.add(clean_child)
+            else:
+                for child in n.args:
+                    walk(child)
 
     walk(node)
     return indicators
@@ -98,8 +115,28 @@ def node_to_mql5(node: ExpressionNode) -> str:
         if tok.startswith("c_") or is_number(tok):
             val = parse_constant_value(tok)
             return f"{val:.2f}"
-        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", tok).lower()
+        clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", re.sub(r"\(.*?\)", "", tok)).lower()
         return f"{clean_name}_val[1]"
+
+    # ComboStrategy multi-indicator composite evaluation
+    if tok.lower() == "combostrategy":
+        conds = []
+        TPSL_KEYWORDS = {
+            "swing_structure", "atr_classic", "trailing_stop", "breakeven", "time_exit",
+            "percentage", "partial_tp", "fixed_pips", "default", "tp_sl", "tpsl"
+        }
+        for child in node.args:
+            raw_token = re.sub(r"^TP/SL:\s*", "", child.token, flags=re.IGNORECASE).strip()
+            c_name = re.sub(r"[^a-zA-Z0-9_]", "_", re.sub(r"\(.*?\)", "", raw_token)).lower()
+            if not c_name or c_name in TPSL_KEYWORDS:
+                continue
+            if any(k in c_name for k in ["rsi", "stoch", "tsi", "ultimate", "willr", "mfi", "cci"]):
+                conds.append(f"({c_name}_val[1] <= 35.0 ? 1.0 : ({c_name}_val[1] >= 65.0 ? -1.0 : 0.0))")
+            elif any(k in c_name for k in ["ema", "sma", "wma", "hma", "kama", "sar", "psar", "donchian", "bollinger", "keltner"]):
+                conds.append(f"(iClose(_Symbol, _Period, 1) > {c_name}_val[1] ? 1.0 : -1.0)")
+            else:
+                conds.append(f"({c_name}_val[1] > 0.0 ? 1.0 : -1.0)")
+        return " + ".join(conds) if conds else "1.0"
 
     args = [node_to_mql5(a) for a in node.args]
 
@@ -172,8 +209,36 @@ def node_to_pine(node: ExpressionNode) -> str:
         if tok.startswith("c_") or is_number(tok):
             val = parse_constant_value(tok)
             return f"{val:.2f}"
+        if tok.lower() in ("close", "close_val"):
+            return "close"
+        if tok.lower() in ("open", "open_val"):
+            return "open"
+        if tok.lower() in ("high", "high_val"):
+            return "high"
+        if tok.lower() in ("low", "low_val"):
+            return "low"
         clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", tok).lower()
         return f"{clean_name}_val"
+
+    # ComboStrategy multi-indicator composite evaluation
+    if tok.lower() == "combostrategy":
+        conds = []
+        TPSL_KEYWORDS = {
+            "swing_structure", "atr_classic", "trailing_stop", "breakeven", "time_exit",
+            "percentage", "partial_tp", "fixed_pips", "default", "tp_sl", "tpsl"
+        }
+        for child in node.args:
+            raw_token = re.sub(r"^TP/SL:\s*", "", child.token, flags=re.IGNORECASE).strip()
+            c_name = re.sub(r"[^a-zA-Z0-9_]", "_", re.sub(r"\(.*?\)", "", raw_token)).lower()
+            if not c_name or c_name in TPSL_KEYWORDS:
+                continue
+            if any(k in c_name for k in ["rsi", "stoch", "tsi", "ultimate", "willr", "mfi", "cci"]):
+                conds.append(f"({c_name}_val <= 35.0 ? 1.0 : ({c_name}_val >= 65.0 ? -1.0 : 0.0))")
+            elif any(k in c_name for k in ["ema", "sma", "wma", "hma", "kama", "sar", "psar", "donchian", "bollinger", "keltner"]):
+                conds.append(f"(close > {c_name}_val ? 1.0 : -1.0)")
+            else:
+                conds.append(f"({c_name}_val > 0.0 ? 1.0 : -1.0)")
+        return " + ".join(conds) if conds else "1.0"
 
     args = [node_to_pine(a) for a in node.args]
 

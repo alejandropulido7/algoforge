@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJobs, getJob, createJob, deleteJob } from '../services/api';
+import { getJobs, getJob, createJob, deleteJob, cancelJob } from '../services/api';
 import type { JobConfig } from '../types/job';
 
 export const useJobs = () => {
@@ -36,3 +36,15 @@ export const useDeleteJob = () => {
     },
   });
 };
+
+export const useCancelJob = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelJob(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
+    },
+  });
+};
+

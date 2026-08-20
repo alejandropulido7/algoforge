@@ -9,7 +9,7 @@ import Spinner from '../components/common/Spinner';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import Modal from '../components/common/Modal';
-import { Cpu, Trash2, AlertTriangle } from 'lucide-react';
+import { Cpu, Trash2, AlertTriangle, AlertCircle, Sliders } from 'lucide-react';
 import styles from '../styles/pages.module.css';
 
 const Results: React.FC = () => {
@@ -107,9 +107,46 @@ const Results: React.FC = () => {
         <JobConfigCard config={job.config} defaultExpanded={true} />
       )}
 
-      <div className={styles.tableCard}>
-        <StrategyTable strategies={strategies || []} />
-      </div>
+      {(!strategies || strategies.length === 0) ? (
+        <div style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderRadius: '12px',
+          padding: '3.5rem 2rem',
+          textAlign: 'center',
+          marginTop: '1.5rem',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            padding: '1.25rem',
+            background: 'rgba(244, 63, 94, 0.1)',
+            borderRadius: '50%',
+            color: 'var(--color-accent-rose)',
+            marginBottom: '1.25rem'
+          }}>
+            <AlertCircle size={40} />
+          </div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.75rem' }}>
+            No se generaron operaciones en el dataset
+          </h3>
+          <p style={{ maxWidth: '640px', margin: '0 auto 1.75rem', color: 'var(--color-text-secondary)', fontSize: '0.9375rem', lineHeight: '1.6' }}>
+            La combinación de indicadores y parámetros de TP/SL configurados no activó ninguna señal de compra o venta en el dataset analizado. Por esta razón, ninguna estrategia calificó como candidata.
+            <br /><br />
+            <strong>Sugerencias:</strong> amplía los umbrales de sobrecompra/sobreventa, reduce los periodos de los indicadores o prueba con otros indicadores técnicos.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+            <Button variant="primary" onClick={() => navigate('/new-job')} className="flex items-center gap-2">
+              <Sliders size={16} />
+              <span>Ajustar Parámetros y Crear Nueva Estrategia</span>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.tableCard}>
+          <StrategyTable strategies={strategies} />
+        </div>
+      )}
 
       {/* Confirmation Modal for Deleting Job */}
       <Modal

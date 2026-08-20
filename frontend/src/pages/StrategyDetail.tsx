@@ -215,6 +215,65 @@ const StrategyDetail: React.FC = () => {
         </div>
       )}
 
+      {/* Indicators Used & Assigned Values */}
+      {Boolean(strategy.indicator_config) && (
+        <div style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderRadius: '8px',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <Activity size={16} color="var(--color-accent-cyan)" />
+            <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-main)' }}>
+              Indicators Used & Assigned Values
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.625rem' }}>
+            {(Array.isArray(strategy.indicator_config) 
+              ? (strategy.indicator_config as any[]) 
+              : Object.entries((strategy.indicator_config as any) || {}).map(([name, params]) => ({ name, params }))
+            ).map((ic: any, idx: number) => {
+              const params = ic.params || {};
+              const paramEntries = Object.entries(params);
+              return (
+                <div key={idx} style={{
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  borderRadius: '6px',
+                  padding: '0.625rem 0.75rem',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}>
+                  <div style={{ color: 'var(--color-accent-cyan)', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                    {ic.name || ic.var_name}
+                    {ic.var_name && ic.var_name !== ic.name ? (
+                      <span style={{ color: 'var(--color-text-muted)', fontWeight: 400, marginLeft: '0.375rem' }}>({ic.var_name})</span>
+                    ) : null}
+                  </div>
+                  {paramEntries.length > 0 ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
+                      {paramEntries.map(([k, v]) => (
+                        <span key={k} style={{
+                          fontSize: '0.6875rem',
+                          background: 'rgba(0, 212, 255, 0.08)',
+                          color: 'var(--color-text-secondary)',
+                          padding: '0.125rem 0.375rem',
+                          borderRadius: '4px'
+                        }}>
+                          {k}={String(v)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>sin parámetros</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Primary KPI Grid */}
       <div className={styles.metricsGrid}>
         <MetricsCard 

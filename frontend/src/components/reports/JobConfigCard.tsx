@@ -168,14 +168,18 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8125rem' }}>
               <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>ENFOQUE ESTRATEGIA</span>
-                <span style={{ fontWeight: 600, color: 'var(--color-accent-amber)' }}>{
-                  risk.strategyApproach === 'break_retest' ? 'Break & Retest' :
-                  risk.strategyApproach === 'fakeout' ? 'Fakeout (Reversión)' :
-                  risk.strategyApproach === 'breakout' ? 'Breakout Directo' :
-                  risk.strategyApproach === 'reversion' ? 'Reversión Tendencia' :
-                  risk.strategyApproach === 'pullback' ? 'Pullback Dinámico' : 'Cualquiera (Auto)'
-                }</span>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>CAPITAL & SIZING</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-accent-cyan)' }}>
+                  ${(risk.initialDeposit ?? 10000).toLocaleString()} • {
+                    (risk.sizingMode || 'lots') === 'lots' 
+                      ? `${risk.lotSize ?? 0.1} Lots` 
+                      : `${risk.riskPct ?? 1.0}% Riesgo (${(risk.riskBase || 'initial_deposit') === 'initial_deposit' ? 'Fijo' : 'Compuesto'})`
+                  }
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>SIMULTANEOUS TRADES</span>
+                <span style={{ fontWeight: 600, color: 'var(--color-text-main)' }}>{risk.maxSimultaneousTrades || 1} Max</span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>DIRECTION</span>
@@ -184,18 +188,6 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>EXECUTION MODE</span>
                 <span style={{ fontWeight: 600, color: 'var(--color-accent-cyan)' }}>{orderTypeLabel}</span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>STOP LOSS</span>
-                <span style={{ color: 'var(--color-accent-rose)', fontWeight: 600 }}>
-                  {risk.slAtrMult ? `${risk.slAtrMult}x ATR` : `${risk.slPips || 50} pips`}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>TAKE PROFIT</span>
-                <span style={{ color: 'var(--color-accent-emerald)', fontWeight: 600 }}>
-                  {risk.tpAtrMult ? `${risk.tpAtrMult}x ATR` : `${risk.tpPips || 100} pips`}
-                </span>
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>RACHA PÉRDIDAS</span>
@@ -216,25 +208,13 @@ export const JobConfigCard: React.FC<JobConfigCardProps> = ({ config, defaultExp
             </div>
           </div>
 
-          {/* Section 4: Timing & Candle Counts */}
+          {/* Section 4: Genetic & AI Pool */}
           <div style={{ background: 'rgba(255, 255, 255, 0.015)', padding: '1rem', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.75rem', color: 'var(--color-accent-cyan)', fontWeight: 600, fontSize: '0.8125rem' }}>
               <Clock size={15} />
-              <span>Timing & Algoritmo</span>
+              <span>Algoritmo Genético</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8125rem' }}>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>PENDING TIMEOUT</span>
-                <span style={{ color: 'var(--color-text-main)', fontWeight: 500 }}>
-                  {risk.pendingTimeoutBars || 3} velas ({risk.pendingOffsetPips || 5} pips)
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>TIME-BASED EXIT</span>
-                <span style={{ color: risk.maxHoldingBars ? 'var(--color-accent-amber)' : 'var(--color-text-muted)', fontWeight: 500 }}>
-                  {risk.maxHoldingBars ? `${risk.maxHoldingBars} velas` : 'Disabled'}
-                </span>
-              </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', fontSize: '0.6875rem' }}>TOP ESTRATEGIAS</span>
                 <span style={{ color: 'var(--color-accent-cyan)', fontWeight: 600 }}>

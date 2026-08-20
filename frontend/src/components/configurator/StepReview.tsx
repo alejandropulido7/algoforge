@@ -1,7 +1,13 @@
-import React from 'react';
-import { Database, Sliders, Dna, ShieldCheck, Scale } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Database, Sliders, Dna, ShieldCheck, Scale, Cpu, Clock, AlertCircle } from 'lucide-react';
 import { useJobStore } from '../../store/jobStore';
+import { INDICATORS_CATALOG } from '../../data/indicatorsCatalog';
 import styles from '../../styles/pages.module.css';
+
+function calculateParamSteps(min: number, step: number, max: number): number {
+  if (!step || step <= 0 || max < min) return 1;
+  return Math.floor((max - min) / step + 1e-9) + 1;
+}
 
 const StepReview: React.FC = () => {
   const { config } = useJobStore();
@@ -20,10 +26,171 @@ const StepReview: React.FC = () => {
     pointSize: 0.0001,
   };
 
+  // Calculate combinations math
+  const { totalIndicatorCombos, totalTpslCombos, totalCombos, estimatedTime } = useMemo(() => {
+    // 1. Indicators
+    const indList = config.indicators || [];
+    let indCombos = 1;
+    if (indList.length > 0) {
+      for (const indId of indList) {
+        const catItem = INDICATORS_CATALOG.find(c => c.id === indId || c.name.toLowerCase() === indId.toLowerCase());
+        const userRanges = config.indicatorRanges?.[indId] || {};
+        let variantsForInd = 1;
+
+        if (catItem && catItem.params.length > 0) {
+          for (const p of catItem.params) {
+            const r = userRanges[p.key] || {};
+            const pMin = r.min !== undefined ? r.min : p.defaultMin;
+            const pStep = r.step !== undefined ? r.step : p.defaultStep;
+            const pMax = r.max !== undefined ? r.max : p.defaultMax;
+            const steps = calculateParamSteps(pMin, pStep, pMax);
+            variantsForInd *= Math.max(1, steps);
+          }
+        }
+        indCombos *= variantsForInd;
+      }
+    }
+
+    // 2. TP/SL Management
+    const tpslModes = config.tpslModes || ['atr_classic'];
+    let tpslCombos = 1;
+    if (tpslModes.length > 0) {
+      for (const modeId of tpslModes) {
+        const userRanges = config.tpslRanges?.[modeId];
+        let modeVariants = 1;
+        if (userRanges && Object.keys(userRanges).length > 0) {
+          for (const pk of Object.keys(userRanges)) {
+            const r = userRanges[pk];
+            const steps = calculateParamSteps(r.min, r.step, r.max);
+            modeVariants *= Math.max(1, steps);
+          }
+        } else {
+          // Canonical default 1 value
+          modeVariants = 1;
+        }
+        tpslCombos *= modeVariants;
+      }
+    }
+
+    const total = indCombos * tpslCombos;
+
+    let timeStr = '~10 - 20 segundos';
+    if (total < 100) {
+      timeStr = '~5 - 15 segundos';
+    } else if (total < 500) {
+      timeStr = '~15 - 30 segundos';
+    } else if (total < 2000) {
+      timeStr = '~30s - 1.5 minutos';
+    } else if (total < 10000) {
+      timeStr = '~1.5 - 3.5 minutos';
+    } else if (total < 50000) {
+      timeStr = '~3.5 - 8 minutos';
+    } else {
+      timeStr = '~8 - 20 minutos';
+    }
+
+    return {
+      totalIndicatorCombos: indCombos,
+      totalTpslCombos: tpslCombos,
+      totalCombos: total,
+      estimatedTime: timeStr
+    };
+  }, [config.indicators, config.indicatorRanges, config.tpslModes, config.tpslRanges]);
+
   return (
     <div className={styles.stepContainer}>
-      <h2 className={styles.stepTitle}>Review Configuration</h2>
-      <p className={styles.stepSubtitle}>Verify your pipeline settings before starting the generation job.</p>
+      <h2 className={styles.stepTitle}>Revisión del Análisis</h2>
+      <p className={styles.stepSubtitle}>Verifica la configuración del pipeline antes de iniciar la búsqueda de estrategias.</p>
+
+      {/* Prominent Combinations Metric Card */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(19, 24, 41, 0.95) 100%)',
+        border: '1px solid rgba(0, 212, 255, 0.25)',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        marginBottom: '1.75rem',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              background: 'rgba(0, 212, 255, 0.15)',
+              padding: '0.625rem',
+              borderRadius: '8px',
+              color: 'var(--color-accent-cyan)'
+            }}>
+              <Cpu size={24} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                Espacio Total de Combinaciones a Evaluar
+              </h3>
+              <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                Se ejecutará un ciclo determinista exhaustivo sobre todo el dataset
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 0.875rem', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+            <Clock size={16} className="text-amber" />
+            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>Tiempo Estimado:</span>
+            <strong style={{ fontSize: '0.875rem', color: 'var(--color-accent-amber)' }}>{estimatedTime}</strong>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1rem',
+          padding: '1rem',
+          background: 'rgba(0,0,0,0.25)',
+          borderRadius: '8px',
+          border: '1px solid rgba(255,255,255,0.05)'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Combinaciones de Indicadores
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-accent-cyan)', marginTop: '0.25rem' }}>
+              {totalIndicatorCombos.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.125rem' }}>
+              {config.indicators.length} indicadores seleccionados
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Variantes TP/SL Management
+            </div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-accent-emerald)', marginTop: '0.25rem' }}>
+              {totalTpslCombos.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.125rem' }}>
+              {(config.tpslModes || []).length} modos de salida activos
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Total Combinaciones a Evaluar
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-accent-cyan)', marginTop: '0.125rem' }}>
+              {totalCombos.toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.125rem' }}>
+              Lotes de 15 con persistencia Redis
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.875rem', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+          <AlertCircle size={15} style={{ color: 'var(--color-accent-amber)', flexShrink: 0 }} />
+          <span>
+            <strong>Nota informativa:</strong> A mayor cantidad de combinaciones (rangos amplios y pasos pequeños), mayor será la precisión y exploración del mercado, pero requerirá mayor tiempo de procesamiento.
+          </span>
+        </div>
+      </div>
 
       <div className={styles.reviewGrid}>
         <div className={styles.reviewCard}>
@@ -57,22 +224,18 @@ const StepReview: React.FC = () => {
         <div className={styles.reviewCard}>
           <div className="flex items-center gap-2 mb-3 text-cyan">
             <Scale size={18} />
-            <h4 style={{ margin: 0 }}>Strategia & Gestión de Riesgo</h4>
+            <h4 style={{ margin: 0 }}>Strategy Config & Ejecución</h4>
           </div>
           <ul>
-            <li><span>Enfoque:</span> <strong style={{ color: 'var(--color-accent-amber)' }}>{
-              risk.strategyApproach === 'break_retest' ? 'Break & Retest' :
-              risk.strategyApproach === 'fakeout' ? 'Fakeout (Reversión)' :
-              risk.strategyApproach === 'breakout' ? 'Breakout Directo' :
-              risk.strategyApproach === 'reversion' ? 'Reversión Tendencia' :
-              risk.strategyApproach === 'pullback' ? 'Pullback Dinámico' : 'Cualquiera (Auto)'
+            <li><span>Depósito Inicial:</span> <strong style={{ color: 'var(--color-accent-cyan)' }}>${(risk.initialDeposit ?? 10000).toLocaleString()} USD</strong></li>
+            <li><span>Dimensionamiento:</span> <strong>{
+              (risk.sizingMode || 'lots') === 'lots' 
+                ? `Lote Fijo (${risk.lotSize ?? 0.1} lots)` 
+                : `${risk.riskPct ?? 1.0}% Riesgo (${(risk.riskBase || 'initial_deposit') === 'initial_deposit' ? 'Depósito Inicial Fijo' : 'Balance Compuesto'})`
             }</strong></li>
-            <li><span>Direction:</span> <strong>{risk.direction === 'long' ? 'Long Only' : (risk.direction === 'short' ? 'Short Only' : 'Long & Short')}</strong></li>
-            <li><span>Order Mode:</span> <strong>{risk.orderType === 'stop' ? 'Buy/Sell Stop' : (risk.orderType === 'limit' ? 'Buy/Sell Limit' : 'On Market')}</strong></li>
-            {risk.orderType !== 'market' && (
-              <li><span>Pending Timeout:</span> <strong>{risk.pendingTimeoutBars || 3} velas ({risk.pendingOffsetPips || 5} pips)</strong></li>
-            )}
-            <li><span>Holding Limit:</span> <strong>{risk.maxHoldingBars ? `${risk.maxHoldingBars} velas` : 'Disabled (SL/TP Only)'}</strong></li>
+            <li><span>Dirección:</span> <strong>{risk.direction === 'long' ? 'Long Only' : (risk.direction === 'short' ? 'Short Only' : 'Long & Short')}</strong></li>
+            <li><span>Tipo de Orden:</span> <strong>{risk.orderType === 'stop' ? 'Buy/Sell Stop' : (risk.orderType === 'limit' ? 'Buy/Sell Limit' : 'A Mercado')}</strong></li>
+            <li><span>Operaciones Simultáneas:</span> <strong>{risk.maxSimultaneousTrades || 1} Max</strong></li>
             <li><span>Racha Pérdidas:</span> <strong>{
               risk.consecutiveLossAction === 'reduce_risk' ? `Reducir ${risk.consecutiveLossReductionPct || 50}% tras ${risk.consecutiveLossThreshold || 3} pérdidas` :
               risk.consecutiveLossAction === 'stop_bot' ? `Pausar tras ${risk.consecutiveLossThreshold || 3} pérdidas` : 'Normal (Sin pausa)'
@@ -86,9 +249,8 @@ const StepReview: React.FC = () => {
                 risk.consecutiveLossReactivation === 'next_week' ? 'A la Siguiente Semana (Lunes)' : 'Manual (Permanente)'
               }</strong></li>
             )}
-            <li><span>Sizing Mode:</span> <strong>{risk.sizingMode === 'lots' ? `${risk.lotSize} Fixed Lots` : `${risk.riskPct}% Risk / Trade`}</strong></li>
-            <li><span>Stop Loss:</span> <strong>{risk.slType === 'pips' ? `${risk.slPips} Pips` : (risk.slType === 'atr' ? `${risk.slAtrMult}x ATR` : 'Signal Only')}</strong></li>
-            <li><span>Take Profit:</span> <strong>{risk.tpType === 'pips' ? `${risk.tpPips} Pips` : (risk.tpType === 'atr' ? `${risk.tpAtrMult}x ATR` : 'Signal Only')}</strong></li>
+            <li><span>TP/SL Management:</span> <strong style={{ color: 'var(--color-accent-cyan)' }}>{(config.tpslModes || []).length} Modos de Salida Activos</strong></li>
+            <li><span>Spread / Comisión:</span> <strong>{risk.spreadPips || 0} pips / ${risk.commissionPerLot || 0} lot</strong></li>
           </ul>
         </div>
 

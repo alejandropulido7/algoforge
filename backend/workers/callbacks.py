@@ -25,3 +25,33 @@ class ProgressCallback:
         except Exception:
             # Fallback when running without remote DB
             pass
+
+        try:
+            from algoforge.services.job_service import _LOCAL_JOBS
+            if self.job_id in _LOCAL_JOBS:
+                _LOCAL_JOBS[self.job_id]["progress"] = int(progress)
+                _LOCAL_JOBS[self.job_id]["current_phase"] = phase
+                if status:
+                    _LOCAL_JOBS[self.job_id]["status"] = status
+                elif progress >= 100 and phase == "done":
+                    _LOCAL_JOBS[self.job_id]["status"] = "completed"
+                elif progress > 0:
+                    _LOCAL_JOBS[self.job_id]["status"] = "running"
+                if message:
+                    _LOCAL_JOBS[self.job_id]["live_message"] = message
+        except Exception:
+            pass
+
+    def is_cancelled(self) -> bool:
+        """Check if job cancellation has been requested via Redis."""
+        try:
+            import redis
+            from algoforge.config import settings
+            r = redis.from_url(settings.REDIS_URL)
+            val = r.get(f"cancel_job:{self.job_id}")
+            if val:
+                return True
+        except Exception:
+            pass
+        return False
+

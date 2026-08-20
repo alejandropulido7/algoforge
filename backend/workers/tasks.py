@@ -3,7 +3,8 @@ import pandas as pd
 from workers.celery_app import celery_app
 from algoforge.supabase.client import get_supabase_client
 from workers.callbacks import ProgressCallback
-from engine.pipeline import StrategyPipeline
+from workers.analysis_logger import AnalysisLogger
+from engine.pipeline import StrategyPipeline, JobCancelledException
 from algoforge.services.data_service import DataService
 from algoforge.services.export_service import register_local_strategy
 
@@ -12,7 +13,15 @@ def run_strategy_pipeline(self, job_id: str, config: dict, user_id: str = ""):
     """Celery background worker task for running the AlgoForge strategy discovery pipeline."""
     client = get_supabase_client()
     cb = ProgressCallback(job_id, client)
-    
+    log = AnalysisLogger(job_id)
+
+    log.section("Parámetros de entrada del job")
+    log.config("symbol", (config.get("dataSource", {}) or {}).get("symbol", config.get("symbol", "?")))
+    log.config("timeframe", (config.get("dataSource", {}) or {}).get("timeframe", config.get("timeframe", "?")))
+    log.config("indicadores", config.get("indicators", []))
+    log.config("tpslModes", config.get("tpslModes", []))
+    log.config("genetic", config.get("genetic", {}))
+
     cb.update(5, "Fetching OHLCV historical data", phase="queued")
     
     try:
@@ -24,6 +33,10 @@ def run_strategy_pipeline(self, job_id: str, config: dict, user_id: str = ""):
         end_date = data_cfg.get("endDate", data_cfg.get("end_date", config.get("end_date", "2024-01-01")))
         source = data_cfg.get("source", config.get("data_source", "yfinance"))
 
+        log.section("Descarga de datos")
+        log.config("fuente", source)
+        log.config("rango", f"{start_date} -> {end_date}")
+
         df = data_svc.fetch_ohlcv(
             symbol=symbol,
             timeframe=timeframe,
@@ -31,14 +44,22 @@ def run_strategy_pipeline(self, job_id: str, config: dict, user_id: str = ""):
             end=end_date,
             source=source
         )
+        log.config("barras descargadas", len(df))
 
-        def progress_reporter(phase="genetic", progress=0, message="", **kwargs):
+        def progress_reporter(phase="indicators", progress=0, message="", **kwargs):
             cb.update(progress, message or f"Processing {phase}", phase=phase)
+            log.info(f"[{phase}] {message or 'procesando'} (progress={progress}%)")
 
         config["id"] = job_id
         config["job_id"] = job_id
-        pipeline = StrategyPipeline(config)
+        pipeline = StrategyPipeline(config, logger=log)
         ranked_strategies = pipeline.run(df, progress_callback=progress_reporter)
+
+        # Check if cancelled during or after pipeline run
+        if cb.is_cancelled():
+            cb.update(100, "Análisis cancelado por el usuario", phase="cancelled", status="cancelled")
+            log.close("cancelled")
+            return {"status": "cancelled", "strategies_count": 0}
 
         # Save strategies to Supabase & local registry (guaranteeing valid UUIDs)
         for strat in ranked_strategies:
@@ -99,9 +120,20 @@ def run_strategy_pipeline(self, job_id: str, config: dict, user_id: str = ""):
                 print(f"[Strategy DB insert notice]: {insert_err}")
 
         cb.update(100, "Completed", phase="done", status="completed")
+        log.section("Guardado de resultados")
+        log.config("estrategias guardadas", len(ranked_strategies))
+        log.close("completed")
         return {"status": "success", "strategies_count": len(ranked_strategies)}
+
+    except JobCancelledException as e:
+        print(f"[Job cancelled]: {e}")
+        cb.update(100, "Análisis cancelado por el usuario", phase="cancelled", status="cancelled")
+        log.close("cancelled")
+        return {"status": "cancelled", "message": str(e)}
 
     except Exception as e:
         print(f"[Pipeline execution error]: {e}")
         cb.update(100, f"Failed: {str(e)}", phase="failed", status="failed")
+        log.close(f"failed: {e}")
         return {"status": "failed", "error": str(e)}
+

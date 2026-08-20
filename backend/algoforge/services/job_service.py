@@ -24,18 +24,20 @@ def _normalize_config(raw: dict) -> dict:
     if "indicators" not in config or config["indicators"] is None:
         config["indicators"] = ["RSI", "SMA"]
     
+    if "tpslModes" not in config or config["tpslModes"] is None:
+        config["tpslModes"] = [
+            "atr_classic", "trailing_stop", "swing_structure", "time_exit",
+            "percentage", "partial_tp", "breakeven", "fixed_pips", "smoothed_atr"
+        ]
+
+    if "tpslRanges" not in config or config["tpslRanges"] is None:
+        config["tpslRanges"] = {}
+    
     if "risk" not in config or not config["risk"]:
         config["risk"] = {
-            "initialDeposit": 10000.0,
-            "sizingMode": "lots",
-            "lotSize": 0.1,
-            "riskPct": 1.0,
             "direction": "both",
-            "strategyApproach": "all",
             "orderType": "market",
-            "pendingTimeoutBars": 3,
-            "pendingOffsetPips": 5.0,
-            "maxHoldingBars": 0,
+            "maxSimultaneousTrades": 1,
             "consecutiveLossAction": "none",
             "consecutiveLossThreshold": 3,
             "consecutiveLossReductionPct": 50.0,
@@ -43,15 +45,16 @@ def _normalize_config(raw: dict) -> dict:
             "consecutiveLossCooldownBars": 20,
             "consecutiveLossCooldownDays": 1,
             "consecutiveLossAutoCooldown": True,
-            "slType": "pips",
-            "slPips": 50.0,
-            "slAtrMult": 1.5,
-            "tpType": "pips",
-            "tpPips": 100.0,
-            "tpAtrMult": 3.0,
             "contractSize": 100000.0,
             "pointSize": 0.0001,
-            "commissionPerLot": 7.0
+            "spreadPips": 1.0,
+            "commissionPerLot": 7.0,
+            "commissionPerSide": True,
+            "swapPerLotPerDay": 0.0,
+            "initialDeposit": 10000.0,
+            "lotSize": 0.1,
+            "slType": "none",
+            "tpType": "none",
         }
 
     if "genetic" not in config or not config["genetic"]:
@@ -168,20 +171,39 @@ def _dispatch_pipeline(job_id: str, config: dict, user_id: str):
         t.start()
 
 def get_job_status(job_id: str) -> dict:
+    job = dict(_LOCAL_JOBS.get(job_id, {
+        "id": job_id,
+        "status": "running",
+        "progress": 0,
+        "current_phase": "queued",
+        "config": {}
+    }))
     client = get_supabase_client()
     try:
         res = client.table("jobs").select("*").eq("id", job_id).single().execute()
         if res.data:
-            return res.data
+            job.update(res.data)
     except Exception:
         pass
-    return _LOCAL_JOBS.get(job_id, {
-        "id": job_id,
-        "status": "running",
-        "progress": 50,
-        "current_phase": "genetic",
-        "config": {}
-    })
+
+    # Check live Redis progress & metadata
+    try:
+        import redis, json
+        from algoforge.config import settings
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        live_prog_str = r.get(f"job_combos:{job_id}:progress")
+        if live_prog_str:
+            live_prog = json.loads(live_prog_str)
+            job["sub_current"] = live_prog.get("current", 0)
+            job["sub_total"] = live_prog.get("total", 0)
+            job["sub_progress"] = live_prog.get("sub_progress", 0)
+            job["valid_candidates"] = live_prog.get("candidates", 0)
+            if live_prog.get("message"):
+                job["live_message"] = live_prog.get("message")
+    except Exception:
+        pass
+
+    return job
 
 def list_user_jobs(user_id: str) -> list[dict]:
     client = get_supabase_client()
@@ -192,6 +214,56 @@ def list_user_jobs(user_id: str) -> list[dict]:
     except Exception:
         pass
     return [j for j in _LOCAL_JOBS.values() if j.get("user_id") == user_id]
+
+def cancel_user_job(job_id: str, user_id: str, user_token: str | None = None) -> dict:
+    """Cancel a running job by setting cancellation flag in Redis, Supabase, and Celery."""
+    # 1. Set cancel flag in Redis with 1 hour expiration
+    try:
+        import redis
+        from algoforge.config import settings
+        r = redis.from_url(settings.REDIS_URL)
+        r.set(f"cancel_job:{job_id}", "1", ex=3600)
+    except Exception as e:
+        print(f"[Redis cancel notice]: {e}")
+
+    # 2. Try cancel/revoke running Celery task immediately
+    try:
+        from workers.celery_app import celery_app
+        celery_app.control.revoke(job_id, terminate=True)
+    except Exception as e:
+        print(f"[Celery revoke notice]: {e}")
+
+    # 3. Update local in-memory store
+    if job_id in _LOCAL_JOBS:
+        _LOCAL_JOBS[job_id]["status"] = "cancelled"
+        _LOCAL_JOBS[job_id]["current_phase"] = "cancelled"
+        _LOCAL_JOBS[job_id]["updated_at"] = datetime.now().isoformat()
+
+    # 4. Update Supabase jobs table
+    updated_db = False
+    if user_token and user_token != "dev_mock_token":
+        try:
+            u_client = get_user_client(user_token)
+            res = u_client.table("jobs").update({
+                "status": "cancelled",
+                "current_phase": "cancelled"
+            }).eq("id", job_id).eq("user_id", user_id).execute()
+            if res.data:
+                updated_db = True
+        except Exception as e:
+            print(f"[Supabase user token cancel notice]: {e}")
+
+    if not updated_db:
+        try:
+            client = get_supabase_client()
+            client.table("jobs").update({
+                "status": "cancelled",
+                "current_phase": "cancelled"
+            }).eq("id", job_id).execute()
+        except Exception as e:
+            print(f"[Supabase service cancel notice]: {e}")
+
+    return {"status": "cancelled", "job_id": job_id}
 
 def delete_user_job(job_id: str, user_id: str, user_token: str | None = None) -> dict:
     """Delete a job and its associated strategies from Supabase and local cache."""

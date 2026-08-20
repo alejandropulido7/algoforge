@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from algoforge.api.deps import get_current_user
 from algoforge.schemas.job import JobCreate
-from algoforge.services.job_service import create_job, get_job_status, list_user_jobs, delete_user_job
+from algoforge.services.job_service import (
+    create_job, get_job_status, list_user_jobs, delete_user_job, cancel_user_job
+)
 
 router = APIRouter()
 
@@ -17,6 +19,11 @@ def list_jobs(user: dict = Depends(get_current_user)):
 def get_status(job_id: str, user: dict = Depends(get_current_user)):
     return get_job_status(job_id)
 
+@router.post("/{job_id}/cancel")
+def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
+    return cancel_user_job(job_id, user["id"], user_token=user.get("token"))
+
 @router.delete("/{job_id}")
 def delete_job(job_id: str, user: dict = Depends(get_current_user)):
     return delete_user_job(job_id, user["id"], user_token=user.get("token"))
+

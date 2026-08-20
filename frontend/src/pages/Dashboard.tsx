@@ -23,9 +23,10 @@ const Dashboard: React.FC = () => {
       completed: 'success',
       running: 'info',
       failed: 'error',
+      cancelled: 'error',
       pending: 'warning'
     };
-    return <Badge variant={map[status] || 'neutral'}>{status}</Badge>;
+    return <Badge variant={map[status] || 'neutral'}>{status.toUpperCase()}</Badge>;
   };
 
   const handleDeleteConfirm = async () => {

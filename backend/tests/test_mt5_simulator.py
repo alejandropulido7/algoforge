@@ -445,3 +445,39 @@ def test_direction_short_trades_on_negative_signal():
     assert t["direction"] == "sell"
     # First evaluated signal at bar 1 -> deferred entry executes at open[2]
     assert t["entry_time"] == str(df.index[2])
+
+def test_equity_curve_matches_trade_count_and_net_profit():
+    # Regression: the reported equity curve must have one step per CLOSED
+    # trade (not one point per bar with floating PnL), so it is visually
+    # consistent with n_trades and ends at initial_deposit + total_net_profit.
+    df = pd.DataFrame({
+        'Open': [100.0, 101.0, 102.0, 101.0, 100.0, 102.0, 103.0, 104.0, 103.0, 102.0],
+        'High': [102.0, 103.0, 104.0, 103.0, 102.0, 104.0, 105.0, 106.0, 105.0, 104.0],
+        'Low':  [99.0, 100.0, 101.0, 100.0, 99.0, 101.0, 102.0, 103.0, 102.0, 101.0],
+        'Close':[100.0] * 10,
+    })
+    buy_signals = np.zeros(10, dtype=bool)
+    sell_signals = np.zeros(10, dtype=bool)
+    buy_signals[1] = True   # buy entry at bar 2 open
+    sell_signals[4] = True  # close buy at bar 5 open
+    buy_signals[5] = True   # buy entry at bar 6 open
+    sell_signals[8] = True  # close buy at bar 9 open
+
+    sim = MT5TradeSimulator({
+        "initialDeposit": 10000.0,
+        "direction": "long",
+        "maxSimultaneousTrades": 1,
+        "sizingMode": "lots",
+        "lotSize": 0.1,
+        "slType": "none",
+        "tpType": "none",
+        "pointSize": 0.0001,
+        "spreadPips": 0.0,
+    })
+    res = sim.simulate(df, buy_signals, sell_signals)
+    # Two trades closed -> curve has initial + one point per trade.
+    assert res.total_trades == 2
+    assert len(res.equity_curve) == res.total_trades + 1
+    assert res.equity_curve[0] == 10000.0
+    assert abs(res.equity_curve[-1] - (10000.0 + sum(t["pnl"] for t in res.trade_log))) < 1e-6
+    assert abs(res.equity_curve[-1] - (10000.0 + res.total_net_profit)) < 1e-6

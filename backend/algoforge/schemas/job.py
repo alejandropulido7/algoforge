@@ -14,22 +14,11 @@ class DataSourceConfig(BaseModel):
 
 class RiskConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
-    initialDeposit: float = 10000.0
-    sizingMode: str = "lots"  # "lots" | "risk_pct" | "cash"
-    lotSize: float = 0.1
     direction: str = "both"   # "both" | "long" | "short"
-    strategyApproach: str = "all" # "all" | "break_retest" | "fakeout" | "breakout" | "reversion" | "pullback"
-    strategy_approach: Optional[str] = None
     orderType: str = "market" # "market" | "stop" | "limit" | "any"
     order_type: Optional[str] = None
     maxSimultaneousTrades: int = 1
     max_simultaneous_trades: Optional[int] = None
-    pendingTimeoutBars: int = 3
-    pending_timeout_bars: Optional[int] = None
-    pendingOffsetPips: float = 5.0
-    pending_offset_pips: Optional[float] = None
-    maxHoldingBars: int = 0   # 0 = disabled
-    max_holding_bars: Optional[int] = None
     consecutiveLossAction: str = "none" # "none" | "reduce_risk" | "stop_bot"
     consecutive_loss_action: Optional[str] = None
     consecutiveLossThreshold: int = 3
@@ -44,18 +33,37 @@ class RiskConfig(BaseModel):
     consecutive_loss_cooldown_days: Optional[int] = None
     consecutiveLossAutoCooldown: bool = True
     consecutive_loss_auto_cooldown: Optional[bool] = None
-    slType: str = "pips"      # "pips" | "atr" | "none"
-    slPips: float = 50.0
-    slAtrMult: float = 1.5
-    tpType: str = "pips"      # "pips" | "atr" | "none"
-    tpPips: float = 100.0
-    tpAtrMult: float = 3.0
     contractSize: float = 100000.0
     pointSize: float = 0.0001
     commissionPerLot: float = 7.0
     spreadPips: float = 1.0
     commissionPerSide: bool = True
     swapPerLotPerDay: float = 0.0
+    # Capital & Position Sizing fields
+    initialDeposit: float = 10000.0
+    initial_deposit: Optional[float] = None
+    sizingMode: str = "lots"  # "lots" | "risk_pct" | "cash"
+    sizing_mode: Optional[str] = None
+    lotSize: float = 0.1
+    lot_size: Optional[float] = None
+    riskPct: float = 1.0
+    risk_pct: Optional[float] = None
+    riskBase: str = "initial_deposit"  # "initial_deposit" | "balance"
+    risk_base: Optional[str] = None
+    slType: str = "none"      # "pips" | "atr" | "none"
+    slPips: float = 50.0
+    slAtrMult: float = 1.5
+    tpType: str = "none"      # "pips" | "atr" | "none"
+    tpPips: float = 100.0
+    tpAtrMult: float = 3.0
+    strategyApproach: Optional[str] = None
+    strategy_approach: Optional[str] = None
+    pendingTimeoutBars: Optional[int] = 0
+    pending_timeout_bars: Optional[int] = None
+    pendingOffsetPips: Optional[float] = 0.0
+    pending_offset_pips: Optional[float] = None
+    maxHoldingBars: Optional[int] = 0
+    max_holding_bars: Optional[int] = None
 
 class GeneticConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -86,6 +94,9 @@ class JobCreate(BaseModel):
     dataSource: Optional[Dict[str, Any]] = None
     indicators: Optional[List[str]] = Field(default_factory=list)
     indicatorParams: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    indicatorRanges: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    tpslModes: Optional[List[str]] = Field(default_factory=list)
+    tpslRanges: Optional[Dict[str, Any]] = Field(default_factory=dict)
     risk: Optional[Dict[str, Any]] = None
     genetic: Optional[Dict[str, Any]] = None
     rl: Optional[Dict[str, Any]] = None
