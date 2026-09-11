@@ -30,7 +30,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -84,8 +84,12 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    # Port 80 on host is used by Dokploy / Traefik / Web server reverse proxy.
+    # Default host port mapped to 3000, or route directly via Dokploy Domain / Traefik.
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-3000}:80"
+    expose:
+      - "80"
 
 volumes:
   redis_data:
