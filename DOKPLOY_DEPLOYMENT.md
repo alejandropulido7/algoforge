@@ -8,10 +8,10 @@ This setup provides multi-stage Docker builds separating compilation from runtim
 
 | Service | Technology | Build Stage | Runtime Stage | Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **backend** | Python 3.11 / FastAPI | `python:3.11-slim` (gcc, g++, build-essential) | `python:3.11-slim` (libgomp1, non-root user) | REST API & Health checks |
-| **celery_worker** | Python 3.11 / Celery | (Shares `backend/Dockerfile`) | (Shares `backend/Dockerfile`) | Async strategy discovery, genetic search & RL trainer |
-| **frontend** | Vite + React + TypeScript | `node:20-alpine` (npm ci && npm run build) | `nginx:alpine` (SPA fallback + gzip + security headers) | Web UI |
-| **redis** | Redis 7 Alpine | N/A | `redis:7-alpine` | Celery broker & result backend |
+| **algoforge-backend** | Python 3.11 / FastAPI | `python:3.11-slim` (gcc, g++, build-essential) | `python:3.11-slim` (libgomp1, non-root user) | REST API & Health checks |
+| **algoforge-celery** | Python 3.11 / Celery | (Shares `backend/Dockerfile`) | (Shares `backend/Dockerfile`) | Async strategy discovery, genetic search & RL trainer |
+| **algoforge-frontend** | Vite + React + TypeScript | `node:20-alpine` (npm ci && npm run build) | `nginx:alpine` (SPA fallback + gzip + security headers) | Web UI |
+| **algoforge-redis** | Redis 7 Alpine | N/A | `redis:7-alpine` | Celery broker & result backend |
 
 ---
 

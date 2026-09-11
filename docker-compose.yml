@@ -2,7 +2,8 @@ services:
   # ----------------------------------------------------------------------------
   # Redis - Celery Broker & Result Backend
   # ----------------------------------------------------------------------------
-  redis:
+  algoforge-redis:
+    container_name: algoforge-redis
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
@@ -20,20 +21,23 @@ services:
   # ----------------------------------------------------------------------------
   # Backend API - FastAPI Server
   # ----------------------------------------------------------------------------
-  backend:
+  algoforge-backend:
+    container_name: algoforge-backend
     build:
       context: ./backend
       dockerfile: Dockerfile
       target: runner
     restart: unless-stopped
     depends_on:
-      redis:
+      algoforge-redis:
         condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    expose:
+      - "8000"
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
+      - REDIS_URL=redis://algoforge-redis:6379/0
+      - CELERY_BROKER_URL=redis://algoforge-redis:6379/0
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:80}
@@ -48,7 +52,8 @@ services:
   # ----------------------------------------------------------------------------
   # Celery Worker - Strategy Discovery & ML / Genetic Engine
   # ----------------------------------------------------------------------------
-  celery_worker:
+  algoforge-celery:
+    container_name: algoforge-celery
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -56,11 +61,11 @@ services:
     restart: unless-stopped
     command: celery -A workers.celery_app.celery_app worker --loglevel=info --concurrency=2
     depends_on:
-      redis:
+      algoforge-redis:
         condition: service_healthy
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
+      - REDIS_URL=redis://algoforge-redis:6379/0
+      - CELERY_BROKER_URL=redis://algoforge-redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
@@ -72,7 +77,8 @@ services:
   # ----------------------------------------------------------------------------
   # Frontend - Vite React SPA served with Nginx
   # ----------------------------------------------------------------------------
-  frontend:
+  algoforge-frontend:
+    container_name: algoforge-frontend
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -83,9 +89,9 @@ services:
         - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
     restart: unless-stopped
     depends_on:
-      - backend
+      - algoforge-backend
     # Port 80 on host is used by Dokploy / Traefik / Web server reverse proxy.
-    # Default host port mapped to 3000, or route directly via Dokploy Domain / Traefik.
+    # Default host port mapped to 3000, or route directly via Dokploy Domain / Traefik / Cloudflare.
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     expose:
