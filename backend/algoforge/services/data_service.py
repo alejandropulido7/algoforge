@@ -226,9 +226,12 @@ class DataService:
             match = next((d for d in index if d["symbol"].upper() == symbol.upper() and d["timeframe"] == timeframe), None)
             if not match:
                 match = next((d for d in index if d["symbol"].upper() == symbol.upper() or d["id"] == symbol), None)
-            if match and os.path.exists(match.get("filepath", "")):
-                try:
-                    df = pd.read_csv(match["filepath"])
+            if match:
+                raw_fp = match.get("filepath", "")
+                csv_path = raw_fp if (raw_fp and os.path.exists(raw_fp)) else os.path.join(STORAGE_DIR, os.path.basename(raw_fp))
+                if os.path.exists(csv_path):
+                    try:
+                        df = pd.read_csv(csv_path)
                     if "Timestamp" in df.columns:
                         ts_clean = df["Timestamp"].astype(str).str.replace(".", "-", regex=False)
                         ts = pd.to_datetime(ts_clean, errors="coerce")
