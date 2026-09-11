@@ -232,20 +232,20 @@ class DataService:
                 if os.path.exists(csv_path):
                     try:
                         df = pd.read_csv(csv_path)
-                    if "Timestamp" in df.columns:
-                        ts_clean = df["Timestamp"].astype(str).str.replace(".", "-", regex=False)
-                        ts = pd.to_datetime(ts_clean, errors="coerce")
-                        mask = pd.Series(True, index=df.index)
-                        if start:
-                            mask = mask & (ts >= pd.to_datetime(start))
-                        if end:
-                            mask = mask & (ts <= (pd.to_datetime(end) + pd.Timedelta(days=1)))
-                        df_filtered = df[mask].reset_index(drop=True)
-                        if len(df_filtered) > 5:
-                            return df_filtered
-                    return df
-                except Exception as e:
-                    print(f"[CSV load/filter error]: {e}")
+                        if "Timestamp" in df.columns:
+                            ts_clean = df["Timestamp"].astype(str).str.replace(".", "-", regex=False)
+                            ts = pd.to_datetime(ts_clean, errors="coerce")
+                            mask = pd.Series(True, index=df.index)
+                            if start:
+                                mask = mask & (ts >= pd.to_datetime(start))
+                            if end:
+                                mask = mask & (ts <= (pd.to_datetime(end) + pd.Timedelta(days=1)))
+                            df_filtered = df[mask].reset_index(drop=True)
+                            if len(df_filtered) > 5:
+                                return df_filtered
+                        return df
+                    except Exception as e:
+                        print(f"[CSV load/filter error]: {e}")
 
         if source == "yfinance":
             try:
