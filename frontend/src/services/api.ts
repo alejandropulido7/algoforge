@@ -3,7 +3,7 @@ import type { Job, JobConfig } from '../types/job';
 import type { Strategy } from '../types/strategy';
 import type { OHLCVBar, DataSource } from '../types/data';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
 const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 const getAuthHeaders = async (): Promise<HeadersInit> => {

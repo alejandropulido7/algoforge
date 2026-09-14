@@ -15,16 +15,27 @@ class Settings(BaseSettings):
     @property
     def cors_list(self) -> list[str]:
         val = self.CORS_ORIGINS
+        origins: list[str] = []
         if isinstance(val, list):
-            return [str(x) for x in val]
-        if isinstance(val, str):
+            origins = [str(x) for x in val]
+        elif isinstance(val, str):
             if val.startswith("["):
                 try:
-                    return json.loads(val)
+                    origins = [str(x) for x in json.loads(val)]
                 except Exception:
                     pass
-            return [i.strip() for i in val.split(",") if i.strip()]
-        return ["*"]
+            if not origins:
+                origins = [i.strip() for i in val.split(",") if i.strip()]
+        else:
+            origins = ["*"]
+
+        # Normalize: strip trailing slashes because Origin headers never have trailing slashes
+        clean_origins = []
+        for o in origins:
+            cleaned = o.rstrip("/")
+            if cleaned:
+                clean_origins.append(cleaned)
+        return clean_origins or ["*"]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
