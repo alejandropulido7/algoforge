@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS public.jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
     config JSONB NOT NULL DEFAULT '{}'::jsonb,
     progress INTEGER NOT NULL DEFAULT 0,
     current_phase TEXT NOT NULL DEFAULT 'queued',
